@@ -1,0 +1,132 @@
+// 문피아(munpia) 공개 데이터 수집 모듈
+// - 베스트/랭킹 리스트: mm.munpia.com (모바일, 서버렌더 HTML)
+// - 개별 작품 지표: novel.munpia.com/{novelId}
+// robots.txt 준수(랭킹/작품 페이지는 차단 대상 아님) · 요청 throttle · 공개 데이터만.
+
+import { parse, type HTMLElement } from "node-html-parser";
+
+const UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
+
+export type RankItem = {
+  rank: number;
+  novelId: number | null;
+  title: string;
+  genre: string;
+  author: string;
+  episodes: number | null; // 연재 화수
+  views: number | null; // 조회수
+  recommends: number | null; // 추천수
+  synopsis: string;
+  cover: string | null;
+};
+
+export type NovelStats = {
+  novelId: number;
+  title: string;
+  genre: string;
+  author: string;
+  authorId: number | null;
+  episodes: number | null; // 연재수
+  views: number | null; // 조회수
+  recommends: number | null; // 추천수
+  chars: number | null; // 글자수
+  favorites: number | null; // 선호작수
+  registeredAt: string | null; // 작품등록일
+  lastUpdatedAt: string | null; // 최근연재일
+  collectedAt: string; // 수집 시각(ISO)
+};
+
+const BEST_SECTIONS = ["today", "week", "month", "total"] as const;
+export type BestSection = (typeof BEST_SECTIONS)[number];
+
+async function fetchHtml(url: string): Promise<string> {
+  const res = await fetch(url, { headers: { "User-Agent": UA } });
+  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+  return res.text();
+}
+
+function toInt(s: string | undefined | null): number | null {
+  if (!s) return null;
+  const digits = s.replace(/[^\d]/g, "");
+  return digits ? parseInt(digits, 10) : null;
+}
+
+/** 베스트 랭킹 리스트 수집 (기본: 오늘 무료 베스트) */
+export async function fetchBest(section: BestSection = "today"): Promise<RankItem[]> {
+  const url = `https://mm.munpia.com/?menu=best&action=list&section=${section}`;
+  const root = parse(await fetchHtml(url));
+  const lis = root.querySelectorAll("li.novel-list-template");
+
+  return lis.map((li, i): RankItem => {
+    const onclick = li.getAttribute("onclick") || "";
+    const idMatch = onclick.match(/view_novel\((\d+)/);
+    const inquirySpans = li.querySelectorAll(".inquiry span");
+    const inq = (label: string) =>
+      inquirySpans.find((s) => s.text.includes(label))?.querySelector("em")?.text ?? null;
+
+    const titleEl = li.querySelector(".title");
+    const title = titleEl
+      ? titleEl.text.replace(titleEl.querySelector("span")?.text ?? "", "").trim()
+      : "";
+    const authorRaw = li.querySelector(".author")?.text ?? "";
+
+    return {
+      rank: i + 1,
+      novelId: idMatch ? parseInt(idMatch[1], 10) : null,
+      title,
+      genre: li.querySelector(".genre")?.text.trim() ?? "",
+      author: authorRaw.split(/\s{2,}|총/)[0].trim(),
+      episodes: toInt(inq("연재")),
+      views: toInt(inq("조회수")),
+      recommends: toInt(inq("추천수")),
+      synopsis: li.querySelector(".detail p")?.text.trim() ?? "",
+      cover: li.querySelector("img")?.getAttribute("src") ?? null,
+    };
+  });
+}
+
+/** 개별 작품 지표 수집 */
+export async function fetchNovel(novelId: number): Promise<NovelStats> {
+  const root = parse(await fetchHtml(`https://novel.munpia.com/${novelId}`));
+
+  // 라벨(dt) → 값(dd) 매핑
+  const labelMap = new Map<string, string>();
+  for (const dl of root.querySelectorAll("dl.meta-etc")) {
+    const dts = dl.querySelectorAll("dt");
+    const dds = dl.querySelectorAll("dd");
+    dts.forEach((dt, idx) => {
+      const v = dds[idx]?.text.trim();
+      if (v) labelMap.set(dt.text.replace(/[:\s]/g, ""), v);
+    });
+  }
+
+  const authorEl = root.querySelector("dl.meta-author dd a");
+  const favEl: HTMLElement | undefined = root
+    .querySelectorAll(".subscribe")
+    .find((s) => s.text.includes("선호작"));
+  const favorites = favEl?.parentNode?.querySelector("b")?.text ?? null;
+
+  const titleEl = root.querySelector(".title-wrap a");
+  const title = titleEl
+    ? titleEl.text.replace(titleEl.querySelector("span")?.text ?? "", "").trim()
+    : "";
+
+  return {
+    novelId,
+    title,
+    genre: root.querySelector(".meta-path strong")?.text.trim() ?? "",
+    author: root.querySelector("dl.meta-author strong")?.text.trim() ?? "",
+    authorId: toInt(authorEl?.getAttribute("data-no")),
+    episodes: toInt(labelMap.get("연재수")),
+    views: toInt(labelMap.get("조회수")),
+    recommends: toInt(labelMap.get("추천수")),
+    chars: toInt(labelMap.get("글자수")),
+    favorites: toInt(favorites),
+    registeredAt: labelMap.get("작품등록일") ?? null,
+    lastUpdatedAt: labelMap.get("최근연재일") ?? null,
+    collectedAt: new Date().toISOString(),
+  };
+}
+
+export { BEST_SECTIONS };
