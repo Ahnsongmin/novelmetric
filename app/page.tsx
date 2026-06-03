@@ -49,12 +49,20 @@ function Header() {
           </span>
           노블메트릭
         </a>
-        <a
-          href="#waitlist"
-          className="rounded-full border border-border px-4 py-1.5 text-sm text-muted transition hover:border-accent hover:text-foreground"
-        >
-          출시 알림 받기
-        </a>
+        <nav className="flex items-center gap-1 text-sm">
+          <a href="/best" className="rounded-full px-3 py-1.5 text-muted transition hover:text-foreground">
+            베스트 분석
+          </a>
+          <a href="/dashboard" className="rounded-full px-3 py-1.5 text-muted transition hover:text-foreground">
+            대시보드
+          </a>
+          <a
+            href="#waitlist"
+            className="rounded-full border border-border px-4 py-1.5 text-muted transition hover:border-accent hover:text-foreground"
+          >
+            출시 알림
+          </a>
+        </nav>
       </div>
     </header>
   );
@@ -354,10 +362,10 @@ function Roadmap() {
       desc: "AI가 후킹 점수와 대안 제목을 제시 (무료 체험 중)",
     },
     {
-      tag: "출시 예정",
-      on: false,
+      tag: "지금",
+      on: true,
       title: "순위·조회수 추적 대시보드",
-      desc: "내 작품 지표를 매일 자동 수집해 추이 그래프로",
+      desc: "문피아 작품 지표 조회 + 추적 등록 (매일 자동 수집) — /dashboard",
     },
     {
       tag: "출시 예정",

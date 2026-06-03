@@ -129,4 +129,12 @@ export async function fetchNovel(novelId: number): Promise<NovelStats> {
   };
 }
 
+/** 문피아 작품 URL 또는 숫자ID 문자열에서 novelId 추출 */
+export function parseNovelId(input: string): number | null {
+  const s = input.trim();
+  if (/^\d+$/.test(s)) return parseInt(s, 10);
+  const m = s.match(/munpia\.com\/(?:novel\/)?(\d+)/) || s.match(/novelno=(\d+)/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
 export { BEST_SECTIONS };
