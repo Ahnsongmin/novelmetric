@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+:root {
+  --background: #0b0a14;
+  --foreground: #f5f3ff;
+  --muted: #a39fc7;
+  --accent: #a78bfa;
+  --accent-2: #f472b6;
+  --card: #15132a;
+  --border: #2a2742;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-card: var(--card);
+  --color-border: var(--border);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background:
+    radial-gradient(1100px 600px at 80% -10%, rgba(167, 139, 250, 0.18), transparent 60%),
+    radial-gradient(900px 500px at 0% 10%, rgba(244, 114, 182, 0.12), transparent 55%),
+    var(--background);
+  color: var(--foreground);
+  font-family:
+    "Pretendard", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+    "Malgun Gothic", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeUp {
+  animation: fadeUp 0.4s ease both;
+}
