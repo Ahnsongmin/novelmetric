@@ -144,6 +144,7 @@ function DiagnoseTool() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="예) 회귀한 천재 헌터의 정산은 다르다"
+          aria-label="작품 제목"
           maxLength={80}
           className="mt-1.5 w-full rounded-lg border border-border bg-background/60 px-3 py-2.5 text-sm outline-none transition focus:border-accent"
         />
@@ -171,7 +172,11 @@ function DiagnoseTool() {
           ))}
         </select>
 
-        {error && <p className="mt-3 text-sm text-accent-2">{error}</p>}
+        {error && (
+          <p role="alert" className="mt-3 text-sm text-accent-2">
+            {error}
+          </p>
+        )}
 
         <button
           type="submit"
@@ -591,7 +596,11 @@ function Waitlist() {
             </button>
           </form>
         )}
-        {error && <p className="mt-3 text-sm text-accent-2">{error}</p>}
+        {error && (
+          <p role="alert" className="mt-3 text-sm text-accent-2">
+            {error}
+          </p>
+        )}
       </div>
     </section>
   );

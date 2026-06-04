@@ -174,6 +174,7 @@ export default function DashboardPage() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="작품 제목 검색 (예: 나 혼자 마법사)  또는  URL·ID"
+          aria-label="작품 제목 검색 또는 문피아 URL·작품 ID"
           className="flex-1 rounded-lg border border-border bg-background/60 px-4 py-3 text-sm outline-none transition focus:border-accent"
         />
         <button
@@ -184,7 +185,11 @@ export default function DashboardPage() {
           {loading ? "…" : "검색 / 조회"}
         </button>
       </form>
-      {error && <p className="mt-3 text-sm text-accent-2">{error}</p>}
+      {error && (
+        <p role="alert" className="mt-3 text-sm text-accent-2">
+          {error}
+        </p>
+      )}
 
       {recents.length > 0 && !data && !hits && !loading && (
         <div className="mt-4">
