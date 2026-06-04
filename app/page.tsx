@@ -189,7 +189,7 @@ function DiagnoseTool() {
       <div className="rounded-2xl border border-border bg-card/40 p-5">
         {!result && !loading && <ResultPlaceholder />}
         {loading && <ResultSkeleton />}
-        {result && <ResultView result={result} />}
+        {result && <ResultView result={result} title={title} />}
       </div>
     </div>
   );
@@ -220,7 +220,7 @@ function ResultSkeleton() {
   );
 }
 
-function ResultView({ result }: { result: DiagnoseResult }) {
+function ResultView({ result, title }: { result: DiagnoseResult; title: string }) {
   const color =
     result.score >= 80
       ? "#34d399"
@@ -266,6 +266,8 @@ function ResultView({ result }: { result: DiagnoseResult }) {
         </div>
       )}
 
+      <ShareButtons title={title} result={result} />
+
       <p className="pt-1 text-center text-[11px] text-muted">
         {result.engine === "claude" ? "Claude AI 정밀 진단" : "샘플 진단(데모)"} · 더 깊은
         분석은 출시 후 제공됩니다 →{" "}
@@ -273,6 +275,45 @@ function ResultView({ result }: { result: DiagnoseResult }) {
           알림 신청
         </a>
       </p>
+    </div>
+  );
+}
+
+function ShareButtons({ title, result }: { title: string; result: DiagnoseResult }) {
+  const [copied, setCopied] = useState<"" | "text" | "link">("");
+
+  const shareText =
+    `📊 웹소설 제목 클릭률 진단\n` +
+    `"${title}" → ${result.score}점 (${result.grade}등급)\n` +
+    (result.titleSuggestions[0] ? `추천 제목 예: ${result.titleSuggestions[0].title}\n` : "") +
+    `무료 진단 👉 https://novelmetric.vercel.app`;
+
+  const shareLink = `https://novelmetric.vercel.app/result?t=${encodeURIComponent(title)}&s=${result.score}&g=${encodeURIComponent(result.grade)}`;
+
+  async function copy(kind: "text" | "link") {
+    try {
+      await navigator.clipboard.writeText(kind === "text" ? shareText : shareLink);
+      setCopied(kind);
+      setTimeout(() => setCopied(""), 1800);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return (
+    <div className="flex gap-2 pt-1">
+      <button
+        onClick={() => copy("text")}
+        className="flex-1 rounded-lg border border-border py-2 text-xs font-semibold transition hover:border-accent"
+      >
+        {copied === "text" ? "✓ 복사됨" : "📋 결과 텍스트 복사"}
+      </button>
+      <button
+        onClick={() => copy("link")}
+        className="flex-1 rounded-lg border border-border py-2 text-xs font-semibold transition hover:border-accent"
+      >
+        {copied === "link" ? "✓ 복사됨" : "🔗 공유 링크 복사"}
+      </button>
     </div>
   );
 }
