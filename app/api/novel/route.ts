@@ -1,5 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchNovel, fetchEpisodes, computeRetention, parseNovelId, type Episode } from "@/lib/munpia";
+import {
+  fetchNovel,
+  fetchEpisodes,
+  fetchBest,
+  computeRetention,
+  parseNovelId,
+  type Episode,
+  type RankItem,
+} from "@/lib/munpia";
+import { computeBenchmark } from "@/lib/analyze";
 import { getSnapshots, saveSnapshot, trackNovel, dbEnabled } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -17,13 +26,15 @@ export async function GET(req: NextRequest) {
     );
   }
   try {
-    const [stats, eps, history] = await Promise.all([
+    const [stats, eps, history, best] = await Promise.all([
       fetchNovel(novelId),
       fetchEpisodes(novelId).catch(() => [] as Episode[]),
       getSnapshots(novelId),
+      fetchBest("today").catch(() => [] as RankItem[]),
     ]);
     const retention = eps.length ? computeRetention(eps) : null;
-    return NextResponse.json({ stats, retention, history, dbEnabled: dbEnabled() });
+    const benchmark = computeBenchmark(stats, best);
+    return NextResponse.json({ stats, retention, benchmark, history, dbEnabled: dbEnabled() });
   } catch (e) {
     console.error("[api/novel]", e);
     return NextResponse.json(

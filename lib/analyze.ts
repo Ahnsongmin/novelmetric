@@ -1,5 +1,5 @@
 // 베스트 랭킹 데이터 분석 (마케팅 콘텐츠/인사이트용)
-import type { RankItem } from "./munpia";
+import type { RankItem, NovelStats } from "./munpia";
 
 // 웹소설 제목 후킹 클리셰 사전
 export const HOOKS: { label: string; re: RegExp }[] = [
@@ -72,5 +72,43 @@ export function analyzeBest(items: RankItem[]): BestAnalysis {
     avgViewsWithHook: avg(withHook),
     avgViewsNoHook: avg(noHook),
     topKeywords,
+  };
+}
+
+// ---------- 경쟁 벤치마크 (내 작품 vs 오늘 베스트) ----------
+
+export type GenreBenchmark = {
+  genre: string;
+  sampleSize: number;
+  avgViews: number;
+  avgRecommends: number;
+  myViews: number | null;
+  myRecommends: number | null;
+  viewsRatio: number | null; // 내 조회수 / 베스트 평균
+  recommendsRatio: number | null;
+  todayBestRank: number | null; // 오늘 베스트에 있으면 순위
+};
+
+export function computeBenchmark(stats: NovelStats, best: RankItem[]): GenreBenchmark | null {
+  if (!best.length) return null;
+  const myGenre = (stats.genre || "").split(/[,\s/]/).filter(Boolean)[0] || "";
+  let pool = best.filter((b) => b.genre === myGenre);
+  if (pool.length < 3) pool = best; // 표본 부족 시 전체 베스트로
+  const avg = (arr: number[]) =>
+    arr.length ? Math.round(arr.reduce((s, x) => s + x, 0) / arr.length) : 0;
+  const avgViews = avg(pool.map((b) => b.views ?? 0).filter((v) => v > 0));
+  const avgRec = avg(pool.map((b) => b.recommends ?? 0).filter((v) => v > 0));
+  const rank = best.find((b) => b.novelId === stats.novelId)?.rank ?? null;
+  return {
+    genre: myGenre || stats.genre,
+    sampleSize: pool.length,
+    avgViews,
+    avgRecommends: avgRec,
+    myViews: stats.views,
+    myRecommends: stats.recommends,
+    viewsRatio: avgViews && stats.views ? Math.round((stats.views / avgViews) * 100) / 100 : null,
+    recommendsRatio:
+      avgRec && stats.recommends ? Math.round((stats.recommends / avgRec) * 100) / 100 : null,
+    todayBestRank: rank,
   };
 }

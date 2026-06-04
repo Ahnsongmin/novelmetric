@@ -30,7 +30,24 @@ type Retention = {
   adjustedRate: number | null;
   grade: string;
 };
-type Resp = { stats: Stats; retention: Retention | null; history: Snapshot[]; dbEnabled: boolean };
+type Benchmark = {
+  genre: string;
+  sampleSize: number;
+  avgViews: number;
+  avgRecommends: number;
+  myViews: number | null;
+  myRecommends: number | null;
+  viewsRatio: number | null;
+  recommendsRatio: number | null;
+  todayBestRank: number | null;
+};
+type Resp = {
+  stats: Stats;
+  retention: Retention | null;
+  benchmark: Benchmark | null;
+  history: Snapshot[];
+  dbEnabled: boolean;
+};
 
 // 투베 진입 적기 벤치마크 (작가 통념: 선작 200)
 const SUNJAK_BENCHMARK = 200;
@@ -128,6 +145,8 @@ export default function DashboardPage() {
             <Metric label="글자수" value={data.stats.chars} />
           </div>
 
+          {data.benchmark && <BenchmarkCard b={data.benchmark} />}
+
           <SunjakBenchmark favorites={data.stats.favorites} />
 
           {data.retention && <RetentionPanel r={data.retention} />}
@@ -176,6 +195,43 @@ function Metric({
         {value === null ? "-" : value.toLocaleString("ko-KR")}
         {unit && value !== null && <span className="ml-0.5 text-xs font-normal text-muted">{unit}</span>}
       </p>
+    </div>
+  );
+}
+
+function BenchmarkCard({ b }: { b: Benchmark }) {
+  const ratioText = (r: number | null) =>
+    r === null ? "-" : r >= 1 ? `${r}배 높음` : `${Math.round(r * 100)}% 수준`;
+  const ratioColor = (r: number | null) =>
+    r === null ? "#a39fc7" : r >= 1.2 ? "#34d399" : r >= 0.8 ? "#a78bfa" : "#fbbf24";
+  return (
+    <div className="rounded-xl border border-border bg-card/40 p-4">
+      <div className="flex items-baseline justify-between">
+        <p className="text-sm font-bold">🏁 경쟁 위치 — 오늘 {b.genre} 베스트 대비</p>
+        {b.todayBestRank ? (
+          <span className="rounded-full bg-emerald-400/20 px-2.5 py-1 text-xs font-bold text-emerald-300">
+            오늘 베스트 {b.todayBestRank}위 진입 중
+          </span>
+        ) : (
+          <span className="text-xs text-muted">표본 {b.sampleSize}작</span>
+        )}
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <div className="rounded-lg border border-border bg-background/40 p-3">
+          <p className="text-xs text-muted">조회수</p>
+          <p className="mt-0.5 text-lg font-extrabold" style={{ color: ratioColor(b.viewsRatio) }}>
+            {ratioText(b.viewsRatio)}
+          </p>
+          <p className="text-[11px] text-muted">베스트 평균 {b.avgViews.toLocaleString("ko-KR")}</p>
+        </div>
+        <div className="rounded-lg border border-border bg-background/40 p-3">
+          <p className="text-xs text-muted">추천수</p>
+          <p className="mt-0.5 text-lg font-extrabold" style={{ color: ratioColor(b.recommendsRatio) }}>
+            {ratioText(b.recommendsRatio)}
+          </p>
+          <p className="text-[11px] text-muted">베스트 평균 {b.avgRecommends.toLocaleString("ko-KR")}</p>
+        </div>
+      </div>
     </div>
   );
 }
