@@ -561,6 +561,7 @@ function Footer() {
     <footer className="border-t border-border/60 py-8 text-center text-xs text-muted">
       <nav className="mb-3 flex flex-wrap justify-center gap-x-4 gap-y-1">
         <a href="/dashboard" className="hover:text-foreground">대시보드</a>
+        <a href="/compare" className="hover:text-foreground">작품 비교</a>
         <a href="/best" className="hover:text-foreground">베스트 분석</a>
         <a href="/guide" className="hover:text-foreground">작가 지표 가이드</a>
       </nav>
