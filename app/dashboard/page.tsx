@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Stats = {
   novelId: number;
@@ -72,6 +72,27 @@ export default function DashboardPage() {
   const [channel, setChannel] = useState<"none" | "email" | "kakao">("none");
   const [contact, setContact] = useState("");
   const [hits, setHits] = useState<SearchHit[] | null>(null);
+  const [recents, setRecents] = useState<{ id: number; title: string }[]>([]);
+
+  useEffect(() => {
+    try {
+      setRecents(JSON.parse(localStorage.getItem("nm_recents") || "[]"));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  function pushRecent(id: number, title: string) {
+    setRecents((prev) => {
+      const next = [{ id, title }, ...prev.filter((x) => x.id !== id)].slice(0, 8);
+      try {
+        localStorage.setItem("nm_recents", JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }
 
   async function analyzeById(idOrUrl: string) {
     setError("");
@@ -84,6 +105,7 @@ export default function DashboardPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "조회 실패");
       setData(json);
+      pushRecent(json.stats.novelId, json.stats.title);
     } catch (err) {
       setError(err instanceof Error ? err.message : "오류가 발생했어요.");
     } finally {
@@ -163,6 +185,26 @@ export default function DashboardPage() {
         </button>
       </form>
       {error && <p className="mt-3 text-sm text-accent-2">{error}</p>}
+
+      {recents.length > 0 && !data && !hits && !loading && (
+        <div className="mt-4">
+          <p className="mb-1.5 text-xs text-muted">최근 분석한 작품</p>
+          <div className="flex flex-wrap gap-2">
+            {recents.map((r) => (
+              <button
+                key={r.id}
+                onClick={() => analyzeById(String(r.id))}
+                className="max-w-[14rem] truncate rounded-full border border-border bg-card/40 px-3 py-1.5 text-xs text-muted transition hover:border-accent hover:text-foreground"
+                title={r.title}
+              >
+                {r.title}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {loading && !hits && <ResultSkeleton />}
 
       {hits && hits.length > 0 && !data && (
         <div className="mt-4 animate-fadeUp">
@@ -259,6 +301,22 @@ function Metric({
         {value === null ? "-" : value.toLocaleString("ko-KR")}
         {unit && value !== null && <span className="ml-0.5 text-xs font-normal text-muted">{unit}</span>}
       </p>
+    </div>
+  );
+}
+
+function ResultSkeleton() {
+  return (
+    <div className="mt-8 animate-pulse space-y-4">
+      <div className="h-6 w-2/3 rounded bg-border/50" />
+      <div className="h-12 w-full rounded-xl bg-border/40" />
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="h-16 rounded-xl bg-border/40" />
+        ))}
+      </div>
+      <div className="h-24 w-full rounded-xl bg-border/30" />
+      <div className="h-40 w-full rounded-xl bg-border/30" />
     </div>
   );
 }
