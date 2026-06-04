@@ -24,6 +24,24 @@ const GENRES = [
   "기타",
 ];
 
+const EXAMPLES: { title: string; synopsis: string; genre: string }[] = [
+  {
+    title: "재벌집 막내아들로 회귀했다",
+    synopsis: "망한 인생, 재벌가 막내로 회귀했다. 이번엔 다 가진다.",
+    genre: "현대판타지",
+  },
+  {
+    title: "악역 영애지만 살고 싶어",
+    synopsis: "소설 속 처형당하는 악역에 빙의했다. 엔딩만은 바꾼다.",
+    genre: "로맨스판타지",
+  },
+  {
+    title: "천재 검사",
+    synopsis: "",
+    genre: "현대판타지",
+  },
+];
+
 export default function Home() {
   return (
     <>
@@ -171,6 +189,24 @@ function DiagnoseTool() {
             </option>
           ))}
         </select>
+
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-muted">예시로 채우기:</span>
+          {EXAMPLES.map((ex) => (
+            <button
+              key={ex.title}
+              type="button"
+              onClick={() => {
+                setTitle(ex.title);
+                setSynopsis(ex.synopsis);
+                setGenre(ex.genre);
+              }}
+              className="rounded-full border border-border px-2.5 py-1 text-xs text-muted transition hover:border-accent hover:text-foreground"
+            >
+              {ex.title}
+            </button>
+          ))}
+        </div>
 
         {error && (
           <p role="alert" className="mt-3 text-sm text-accent-2">

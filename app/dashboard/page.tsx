@@ -191,6 +191,15 @@ export default function DashboardPage() {
         </p>
       )}
 
+      {!data && !hits && !loading && (
+        <button
+          onClick={() => analyzeById("555698")}
+          className="mt-3 text-sm text-accent underline-offset-2 hover:underline"
+        >
+          ✨ 작품 ID가 없다면? 예시 작품으로 바로 체험해보기 →
+        </button>
+      )}
+
       {recents.length > 0 && !data && !hits && !loading && (
         <div className="mt-4">
           <p className="mb-1.5 text-xs text-muted">최근 분석한 작품</p>
