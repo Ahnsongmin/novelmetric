@@ -85,6 +85,14 @@ export default function ComparePage() {
       </form>
       {error && <p className="mt-3 text-sm text-accent-2">{error}</p>}
 
+      {loading && !a && (
+        <div className="mt-8 grid animate-pulse grid-cols-3 gap-3">
+          {Array.from({ length: 18 }).map((_, i) => (
+            <div key={i} className={`h-9 rounded ${i % 3 === 0 ? "bg-border/30" : "bg-border/40"}`} />
+          ))}
+        </div>
+      )}
+
       {a && b && <CompareTable a={a} b={b} />}
 
       <p className="mt-8 text-center text-xs text-muted">
