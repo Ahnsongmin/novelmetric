@@ -22,6 +22,7 @@ type Snapshot = {
   collected_at: string;
 };
 type Episode = { no: number; title: string; date: string; views: number | null };
+type Dropoff = { no: number; title: string; dropPct: number; from: number; to: number };
 type Retention = {
   episodes: Episode[];
   firstViews: number | null;
@@ -29,6 +30,7 @@ type Retention = {
   cumulativeRate: number | null;
   adjustedRate: number | null;
   grade: string;
+  dropoffs: Dropoff[];
 };
 type Benchmark = {
   genre: string;
@@ -444,6 +446,21 @@ function RetentionPanel({ r }: { r: Retention }) {
           <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
             <path d={path} fill="none" stroke={color} strokeWidth="2" />
           </svg>
+        </div>
+      )}
+      {r.dropoffs.length > 0 && (
+        <div className="mt-3 rounded-lg border border-accent-2/40 bg-accent-2/10 p-3">
+          <p className="text-xs font-bold">🚪 독자 이탈 의심 구간</p>
+          <ul className="mt-1.5 space-y-1">
+            {r.dropoffs.map((d) => (
+              <li key={d.no} className="text-xs text-muted">
+                <b className="text-foreground">{d.no}화</b>에서 직전 대비{" "}
+                <b className="text-accent-2">-{d.dropPct}%</b> 급락 ({d.from.toLocaleString("ko-KR")} →{" "}
+                {d.to.toLocaleString("ko-KR")})
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1.5 text-[11px] text-muted">이 회차의 전개·끊은 지점을 점검해 보세요.</p>
         </div>
       )}
     </div>

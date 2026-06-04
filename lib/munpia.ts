@@ -182,6 +182,8 @@ export async function searchNovels(keyword: string, limit = 20): Promise<SearchH
 
 export type Episode = { no: number; title: string; date: string; views: number | null };
 
+export type Dropoff = { no: number; title: string; dropPct: number; from: number; to: number };
+
 export type Retention = {
   episodes: Episode[]; // 1화 → 최신화 순서
   firstViews: number | null;
@@ -189,6 +191,7 @@ export type Retention = {
   cumulativeRate: number | null; // 누적 연독률 = 최신화/1화 ×100
   adjustedRate: number | null; // 보정 연독률 = (최신-3화)/3화 ×100  (작가들이 쓰는 기준)
   grade: string; // 매우 좋음 / 좋음 / 보통 / 주의
+  dropoffs: Dropoff[]; // 회차별 급락(이탈 의심) 구간
 };
 
 /** 작품의 전체 회차별 조회수 수집 (페이지네이션). 1화→최신화 순으로 반환.
@@ -240,6 +243,19 @@ export function computeRetention(eps: Episode[]): Retention {
 
   const r = adjusted ?? cumulative ?? 0;
   const grade = r >= 70 ? "매우 좋음" : r >= 60 ? "좋음" : r >= 45 ? "보통" : "주의";
+
+  // 회차별 급락(이탈 의심): 4화 이후 ~ 최신-3화, 직전 회차 대비 15%+ 하락
+  const dropoffs: Dropoff[] = [];
+  for (let i = 3; i < valid.length - 3; i++) {
+    const prev = valid[i - 1].views;
+    const cur = valid[i].views;
+    if (prev > 0 && cur < prev) {
+      const dropPct = Math.round((1 - cur / prev) * 100);
+      if (dropPct >= 15) dropoffs.push({ no: valid[i].no, title: valid[i].title, dropPct, from: prev, to: cur });
+    }
+  }
+  dropoffs.sort((a, b) => b.dropPct - a.dropPct);
+
   return {
     episodes: eps,
     firstViews: first,
@@ -247,6 +263,7 @@ export function computeRetention(eps: Episode[]): Retention {
     cumulativeRate: cumulative,
     adjustedRate: adjusted,
     grade,
+    dropoffs: dropoffs.slice(0, 3),
   };
 }
 
