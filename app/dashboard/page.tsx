@@ -203,6 +203,8 @@ export default function DashboardPage() {
             </p>
           </div>
 
+          <Prescription data={data} />
+
           <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
             <Metric label="연재 화수" value={data.stats.episodes} unit="화" />
             <Metric label="조회수" value={data.stats.views} />
@@ -256,6 +258,54 @@ function Metric({
       <p className="mt-1 text-lg font-extrabold">
         {value === null ? "-" : value.toLocaleString("ko-KR")}
         {unit && value !== null && <span className="ml-0.5 text-xs font-normal text-muted">{unit}</span>}
+      </p>
+    </div>
+  );
+}
+
+function Prescription({ data }: { data: Resp }) {
+  const ret = data.retention?.adjustedRate ?? null;
+  const vr = data.benchmark?.viewsRatio ?? null;
+  const fav = data.stats.favorites ?? 0;
+  const hasDrop = (data.retention?.dropoffs?.length ?? 0) > 0;
+
+  let text: string;
+  let tone: "good" | "warn" | "info" = "info";
+
+  if (ret !== null && ret < 45) {
+    tone = "warn";
+    text = hasDrop
+      ? `연독률이 낮습니다(${ret}%). 이탈 구간(${data.retention!.dropoffs[0].no}화)의 전개·끊은 지점을 먼저 손보세요.`
+      : `연독률이 낮습니다(${ret}%). 초반 회차 몰입도와 연참 주기를 점검해 보세요.`;
+  } else if (vr !== null && vr < 0.8 && ret !== null && ret >= 55) {
+    tone = "info";
+    text = `연독률(${ret}%)은 괜찮은데 유입이 약해요(베스트 평균의 ${Math.round(vr * 100)}%). 제목 클릭률부터 점검하세요 → 무료 진단.`;
+  } else if (fav >= 150 && fav < SUNJAK_BENCHMARK) {
+    tone = "good";
+    text = `선작 ${fav.toLocaleString("ko-KR")} — 투베 적기(200)에 근접! 지금이 홍보·연참 집중 타이밍입니다.`;
+  } else if (ret !== null && ret >= 60 && (vr === null || vr >= 1)) {
+    tone = "good";
+    text = `지표가 건강합니다(연독률 ${ret}%). 연참 유지하면서 투베 진입을 노려보세요.`;
+  } else {
+    text = `꾸준히 추적하며 연독률·선작 추세를 지켜보세요. 제목 클릭률 점검도 추천합니다.`;
+  }
+
+  const c =
+    tone === "good"
+      ? "border-emerald-400/40 bg-emerald-400/10"
+      : tone === "warn"
+        ? "border-accent-2/40 bg-accent-2/10"
+        : "border-accent/40 bg-accent/10";
+  return (
+    <div className={`rounded-xl border p-4 ${c}`}>
+      <p className="text-sm">
+        <b>💡 한 줄 처방 </b>
+        {text}{" "}
+        {(vr !== null && vr < 0.8) || (ret !== null && ret < 45) ? (
+          <a href="/#top" className="font-bold text-accent underline">
+            무료 제목 진단 →
+          </a>
+        ) : null}
       </p>
     </div>
   );
