@@ -133,6 +133,44 @@ export async function fetchNovel(novelId: number): Promise<NovelStats> {
   };
 }
 
+// ---------- 작품 검색 (제목으로) ----------
+
+export type SearchHit = {
+  novelId: number;
+  title: string;
+  author: string;
+  genre: string;
+  cover: string | null;
+};
+
+/** 제목 키워드로 문피아 작품 검색 → 후보 목록 */
+export async function searchNovels(keyword: string, limit = 20): Promise<SearchHit[]> {
+  const kw = keyword.trim();
+  if (!kw) return [];
+  const url = `https://www.munpia.com/search?keyword=${encodeURIComponent(kw)}`;
+  const root = parse(await fetchHtml(url));
+  const anchors = root.querySelectorAll("a.item, a.hero-item");
+  const seen = new Set<number>();
+  const hits: SearchHit[] = [];
+  for (const a of anchors) {
+    const href = a.getAttribute("href") || "";
+    const id = Number(href.match(/novel\.munpia\.com\/(\d+)/)?.[1]);
+    if (!id || seen.has(id)) continue;
+    const title = a.querySelector(".title")?.text.trim() ?? "";
+    if (!title) continue;
+    seen.add(id);
+    hits.push({
+      novelId: id,
+      title,
+      author: a.querySelector(".author")?.text.trim() ?? "",
+      genre: a.querySelector(".genre")?.text.trim().replace(/\s+/g, " ") ?? "",
+      cover: a.querySelector("img")?.getAttribute("src") ?? null,
+    });
+    if (hits.length >= limit) break;
+  }
+  return hits;
+}
+
 // ---------- 연독률 (회차별 조회수 기반) ----------
 
 export type Episode = { no: number; title: string; date: string; views: number | null };

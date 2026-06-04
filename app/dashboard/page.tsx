@@ -49,6 +49,14 @@ type Resp = {
   dbEnabled: boolean;
 };
 
+type SearchHit = {
+  novelId: number;
+  title: string;
+  author: string;
+  genre: string;
+  cover: string | null;
+};
+
 // 투베 진입 적기 벤치마크 (작가 통념: 선작 200)
 const SUNJAK_BENCHMARK = 200;
 
@@ -61,18 +69,45 @@ export default function DashboardPage() {
   const [tracked, setTracked] = useState(false);
   const [channel, setChannel] = useState<"none" | "email" | "kakao">("none");
   const [contact, setContact] = useState("");
+  const [hits, setHits] = useState<SearchHit[] | null>(null);
+
+  async function analyzeById(idOrUrl: string) {
+    setError("");
+    setData(null);
+    setHits(null);
+    setTracked(false);
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/novel?q=${encodeURIComponent(idOrUrl)}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "조회 실패");
+      setData(json);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "오류가 발생했어요.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function lookup(e: React.FormEvent) {
     e.preventDefault();
+    const term = q.trim();
+    if (!term) return;
+    // ID(숫자) 또는 문피아 URL이면 바로 분석, 아니면 제목 검색
+    if (/^\d+$/.test(term) || /munpia\.com\/\d+/.test(term)) {
+      analyzeById(term);
+      return;
+    }
     setError("");
     setData(null);
     setTracked(false);
     setLoading(true);
     try {
-      const res = await fetch(`/api/novel?q=${encodeURIComponent(q)}`);
+      const res = await fetch(`/api/search?q=${encodeURIComponent(term)}`);
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "조회 실패");
-      setData(json);
+      if (!res.ok) throw new Error(json.error || "검색 실패");
+      setHits(json.hits);
+      if (!json.hits.length) setError("검색 결과가 없어요. 제목을 다시 확인해 주세요.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "오류가 발생했어요.");
     } finally {
@@ -106,15 +141,15 @@ export default function DashboardPage() {
       </a>
       <h1 className="mt-3 text-2xl font-bold md:text-3xl">작품 성장 대시보드</h1>
       <p className="mt-1.5 text-muted">
-        문피아 작품 URL 또는 ID를 넣으면 <b className="text-foreground">연독률·선작·조회수</b>를 자동 계산하고
-        투베 진입 게이지·추이를 보여줍니다. (회차별 조회수까지 분석)
+        <b className="text-foreground">작품 제목</b>으로 검색하거나 문피아 URL·작품 ID를 넣으면, 연독률·선작·조회수를
+        자동 계산하고 투베 진입 게이지·추이를 보여줍니다.
       </p>
 
       <form onSubmit={lookup} className="mt-6 flex flex-col gap-2 sm:flex-row">
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="예) https://novel.munpia.com/555698  또는  555698"
+          placeholder="작품 제목 검색 (예: 나 혼자 마법사)  또는  URL·ID"
           className="flex-1 rounded-lg border border-border bg-background/60 px-4 py-3 text-sm outline-none transition focus:border-accent"
         />
         <button
@@ -122,10 +157,37 @@ export default function DashboardPage() {
           disabled={loading}
           className="rounded-lg bg-gradient-to-r from-accent to-accent-2 px-6 py-3 font-bold text-background transition hover:opacity-90 disabled:opacity-60"
         >
-          {loading ? "조회 중…" : "지표 조회"}
+          {loading ? "…" : "검색 / 조회"}
         </button>
       </form>
       {error && <p className="mt-3 text-sm text-accent-2">{error}</p>}
+
+      {hits && hits.length > 0 && !data && (
+        <div className="mt-4 animate-fadeUp">
+          <p className="mb-2 text-sm text-muted">검색 결과 — 분석할 작품을 고르세요</p>
+          <ul className="space-y-2">
+            {hits.map((h) => (
+              <li key={h.novelId}>
+                <button
+                  onClick={() => analyzeById(String(h.novelId))}
+                  className="flex w-full items-center gap-3 rounded-lg border border-border bg-card/40 p-2.5 text-left transition hover:border-accent"
+                >
+                  {h.cover && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={h.cover.startsWith("http") ? h.cover : `https:${h.cover}`} alt="" className="h-12 w-9 shrink-0 rounded object-cover" />
+                  )}
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold">{h.title}</span>
+                    <span className="block truncate text-xs text-muted">
+                      {h.genre} · {h.author}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {data && (
         <div className="mt-8 animate-fadeUp space-y-6">
