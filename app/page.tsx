@@ -31,7 +31,9 @@ export default function Home() {
       <main className="flex-1">
         <Hero />
         <ValueProps />
+        <Comparison />
         <Roadmap />
+        <FAQ />
         <Waitlist />
       </main>
       <Footer />
@@ -50,8 +52,11 @@ function Header() {
           노블메트릭
         </a>
         <nav className="flex items-center gap-1 text-sm">
-          <a href="/best" className="rounded-full px-3 py-1.5 text-muted transition hover:text-foreground">
+          <a href="/best" className="hidden rounded-full px-3 py-1.5 text-muted transition hover:text-foreground sm:block">
             베스트 분석
+          </a>
+          <a href="/guide" className="hidden rounded-full px-3 py-1.5 text-muted transition hover:text-foreground sm:block">
+            가이드
           </a>
           <a href="/dashboard" className="rounded-full px-3 py-1.5 text-muted transition hover:text-foreground">
             대시보드
@@ -353,6 +358,84 @@ function ValueProps() {
   );
 }
 
+function Comparison() {
+  const rows = [
+    ["연독률 자동 계산", true, true],
+    ["회차별 조회수 차트", true, true],
+    ["매일 자동 추적 · 추이 기록", true, false],
+    ["투베 진입 게이지(선작)", true, false],
+    ["경쟁작(장르 베스트) 비교", true, false],
+    ["제목 클릭률 AI 진단", true, false],
+    ["급변 알림(이메일/카톡)", true, false],
+    ["설치 불필요(웹)", true, false],
+  ] as const;
+  return (
+    <section className="mx-auto max-w-3xl px-5 py-14">
+      <h2 className="text-center text-2xl font-bold">기존 연독률 계산기와 뭐가 다른가</h2>
+      <p className="mt-2 text-center text-sm text-muted">
+        크롬 확장은 ‘지금 이 순간의 숫자’만 보여줍니다. 노블메트릭은 <b className="text-foreground">변화를 추적</b>해요.
+      </p>
+      <div className="mt-6 overflow-hidden rounded-2xl border border-border">
+        <table className="w-full text-sm">
+          <thead className="bg-card/60">
+            <tr>
+              <th className="px-4 py-3 text-left font-medium text-muted">기능</th>
+              <th className="px-3 py-3 text-center font-bold text-accent">노블메트릭</th>
+              <th className="px-3 py-3 text-center font-medium text-muted">크롬 확장</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(([label, a, b]) => (
+              <tr key={label} className="border-t border-border/60">
+                <td className="px-4 py-2.5">{label}</td>
+                <td className="px-3 py-2.5 text-center">{a ? "✅" : "—"}</td>
+                <td className="px-3 py-2.5 text-center text-muted">{b ? "✅" : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function FAQ() {
+  const items = [
+    {
+      q: "연독률이 뭔가요? 어떻게 계산하나요?",
+      a: "독자가 1화부터 최신화까지 얼마나 따라오는지의 비율입니다. 노블메트릭은 회차별 조회수를 모아 (최신-3화)/3화 기준으로 자동 계산하고 60~70% 기준으로 등급을 매겨줍니다. 손으로 엑셀에 옮길 필요 없어요.",
+    },
+    {
+      q: "투베(투데이베스트) 진입은 어떻게 도와주나요?",
+      a: "작가 통념상 '선작 200'이 투베를 노릴 적기입니다. 대시보드의 투베 게이지가 현재 선작이 200에 얼마나 가까운지, 매일 얼마나 느는지 보여줍니다.",
+    },
+    {
+      q: "어떤 플랫폼을 지원하나요?",
+      a: "현재 문피아 공개 데이터를 지원합니다. 작품 URL이나 작품 ID만 넣으면 됩니다. (노벨피아·기타 플랫폼은 순차 확장 예정)",
+    },
+    {
+      q: "무료인가요?",
+      a: "제목 진단과 작품 지표·연독률 조회는 무료로 써볼 수 있습니다. 매일 자동 추적·알림 등은 추후 Pro로 제공될 예정입니다.",
+    },
+  ];
+  return (
+    <section className="mx-auto max-w-3xl px-5 py-10">
+      <h2 className="text-center text-2xl font-bold">자주 묻는 질문</h2>
+      <div className="mt-6 space-y-3">
+        {items.map((it) => (
+          <details key={it.q} className="group rounded-xl border border-border bg-card/40 p-4">
+            <summary className="cursor-pointer list-none font-semibold marker:content-none">
+              <span className="text-accent">Q. </span>
+              {it.q}
+            </summary>
+            <p className="mt-2 text-sm leading-relaxed text-muted">{it.a}</p>
+          </details>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function Roadmap() {
   const items = [
     {
@@ -476,6 +559,11 @@ function Waitlist() {
 function Footer() {
   return (
     <footer className="border-t border-border/60 py-8 text-center text-xs text-muted">
+      <nav className="mb-3 flex flex-wrap justify-center gap-x-4 gap-y-1">
+        <a href="/dashboard" className="hover:text-foreground">대시보드</a>
+        <a href="/best" className="hover:text-foreground">베스트 분석</a>
+        <a href="/guide" className="hover:text-foreground">작가 지표 가이드</a>
+      </nav>
       <p>© 2026 노블메트릭(NovelMetric). 웹소설 작가를 위한 노출·성장 분석.</p>
     </footer>
   );
