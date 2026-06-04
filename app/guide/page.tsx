@@ -34,6 +34,16 @@ export default function GuidePage() {
           <b className="text-foreground">기준:</b> 60~70% 이상이면 양호, 그 이상이면 아주 좋은 편입니다. 떨어진다면
           어느 회차에서 독자가 이탈했는지(꺾이는 지점)를 보는 게 핵심이에요.
         </p>
+        <div className="mt-3 rounded-lg border border-border bg-card/40 p-3 text-foreground">
+          <p className="text-xs font-bold text-accent">계산 예시</p>
+          <p className="mt-1">
+            3화 조회수 <b>60,000</b>, 최신화-3 회차 조회수 <b>36,000</b>이라면 →{" "}
+            <code className="rounded bg-background px-1.5 py-0.5">36,000 ÷ 60,000 = 60%</code>. 양호한 편입니다.
+          </p>
+          <p className="mt-1 text-muted">
+            노블메트릭은 회차별 조회수를 자동으로 모아 이 값을 계산하고, 급락한 ‘이탈 회차’까지 짚어줍니다.
+          </p>
+        </div>
       </Section>
 
       <Section title="2. 투데이베스트(투베) 진입">
@@ -45,6 +55,16 @@ export default function GuidePage() {
           작가 통념상 <b className="text-foreground">선작 200 정도</b>가 투베를 노려볼 적기로 알려져 있습니다.
           노블메트릭의 ‘투베 게이지’가 현재 선작이 200에 얼마나 가까운지 보여줍니다.
         </p>
+        <div className="mt-3 rounded-lg border border-border bg-card/40 p-3 text-foreground">
+          <p className="text-xs font-bold text-accent">투베 진입 체크리스트</p>
+          <ul className="mt-1.5 space-y-1 text-sm">
+            <li>☐ 선작 200 이상 모였는가</li>
+            <li>☐ 연독률 60% 이상으로 유지되는가</li>
+            <li>☐ 매일 같은 시간 꾸준히 연재(연참)하는가</li>
+            <li>☐ 제목·소개가 클릭을 유도하는가 (유입이 받쳐주는가)</li>
+            <li>☐ 초반 회차(특히 1~5화)의 이탈이 크지 않은가</li>
+          </ul>
+        </div>
       </Section>
 
       <Section title="3. 선작(선호작) · 조회수 · 추천">
