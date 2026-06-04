@@ -44,9 +44,9 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/novel { q, email? } → 추적 등록 + 첫 스냅샷 적재
+// POST /api/novel { q, channel?, contact? } → 추적 등록 + 첫 스냅샷 적재
 export async function POST(req: NextRequest) {
-  let body: { q?: string; email?: string };
+  let body: { q?: string; channel?: string; contact?: string };
   try {
     body = await req.json();
   } catch {
@@ -56,10 +56,11 @@ export async function POST(req: NextRequest) {
   if (!novelId) {
     return NextResponse.json({ error: "작품 URL/ID가 올바르지 않습니다." }, { status: 400 });
   }
+  const channel = ["email", "kakao"].includes(body.channel || "") ? body.channel : "none";
   try {
     const stats = await fetchNovel(novelId);
     await saveSnapshot(stats); // DB 없으면 no-op
-    await trackNovel(novelId, body.email);
+    await trackNovel(novelId, { channel, contact: body.contact });
     return NextResponse.json({ ok: true, tracked: dbEnabled(), stats });
   } catch (e) {
     console.error("[api/novel POST]", e);

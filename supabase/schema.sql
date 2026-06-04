@@ -45,9 +45,15 @@ create table if not exists public.tracked_novels (
   id bigint generated always as identity primary key,
   novel_id bigint not null,
   email text,
+  notify_channel text default 'none', -- 'email' | 'kakao' | 'none' (작가가 앱에서 선택)
+  contact text,                        -- 이메일 주소 또는 휴대폰번호
   created_at timestamptz not null default now(),
   unique (novel_id, email)
 );
+
+-- 기존 테이블에 알림 컬럼 추가(이미 만들었던 경우용 마이그레이션)
+alter table public.tracked_novels add column if not exists notify_channel text default 'none';
+alter table public.tracked_novels add column if not exists contact text;
 
 -- 서버(서비스 롤 키)에서만 접근. 클라이언트 직접 접근 차단.
 alter table public.novels enable row level security;

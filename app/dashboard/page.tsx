@@ -59,6 +59,8 @@ export default function DashboardPage() {
   const [data, setData] = useState<Resp | null>(null);
   const [tracking, setTracking] = useState(false);
   const [tracked, setTracked] = useState(false);
+  const [channel, setChannel] = useState<"none" | "email" | "kakao">("none");
+  const [contact, setContact] = useState("");
 
   async function lookup(e: React.FormEvent) {
     e.preventDefault();
@@ -85,7 +87,7 @@ export default function DashboardPage() {
       const res = await fetch("/api/novel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ q: String(data.stats.novelId) }),
+        body: JSON.stringify({ q: String(data.stats.novelId), channel, contact }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "추적 실패");
@@ -153,20 +155,16 @@ export default function DashboardPage() {
 
           <TrendChart history={data.history} />
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={track}
-              disabled={tracking || tracked}
-              className="rounded-lg border border-accent bg-accent/10 px-5 py-2.5 text-sm font-bold text-foreground transition hover:bg-accent/20 disabled:opacity-60"
-            >
-              {tracked ? "✓ 추적 등록됨" : tracking ? "등록 중…" : "📈 이 작품 매일 추적하기"}
-            </button>
-            {!data.dbEnabled && (
-              <span className="text-xs text-muted">
-                * 추이 누적은 DB 연결 후 매일 자동 수집됩니다.
-              </span>
-            )}
-          </div>
+          <TrackBox
+            tracked={tracked}
+            tracking={tracking}
+            channel={channel}
+            setChannel={setChannel}
+            contact={contact}
+            setContact={setContact}
+            onTrack={track}
+            dbEnabled={data.dbEnabled}
+          />
         </div>
       )}
     </main>
@@ -195,6 +193,81 @@ function Metric({
         {value === null ? "-" : value.toLocaleString("ko-KR")}
         {unit && value !== null && <span className="ml-0.5 text-xs font-normal text-muted">{unit}</span>}
       </p>
+    </div>
+  );
+}
+
+function TrackBox({
+  tracked,
+  tracking,
+  channel,
+  setChannel,
+  contact,
+  setContact,
+  onTrack,
+  dbEnabled,
+}: {
+  tracked: boolean;
+  tracking: boolean;
+  channel: "none" | "email" | "kakao";
+  setChannel: (c: "none" | "email" | "kakao") => void;
+  contact: string;
+  setContact: (s: string) => void;
+  onTrack: () => void;
+  dbEnabled: boolean;
+}) {
+  if (tracked) {
+    return (
+      <div className="rounded-xl border border-emerald-400/40 bg-emerald-400/10 p-4 text-sm">
+        ✅ 추적 등록 완료! 매일 자동 수집되고, 연독률·선작이 급변하면{" "}
+        {channel === "email" ? "이메일로" : channel === "kakao" ? "카카오톡으로" : "(알림 미설정)"} 알려드릴게요.
+      </div>
+    );
+  }
+  const opts: { key: "none" | "email" | "kakao"; label: string }[] = [
+    { key: "none", label: "알림 안 받음" },
+    { key: "email", label: "📧 이메일" },
+    { key: "kakao", label: "💬 카카오톡" },
+  ];
+  return (
+    <div className="rounded-xl border border-border bg-card/40 p-4">
+      <p className="text-sm font-bold">📈 이 작품 매일 추적 + 변화 알림</p>
+      <p className="mt-0.5 text-xs text-muted">
+        연독률·선작·조회수를 매일 자동 수집하고, 급변(투베 적기·선작 급증 등) 시 알려드립니다. 알림 방식을 고르세요.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {opts.map((o) => (
+          <button
+            key={o.key}
+            onClick={() => setChannel(o.key)}
+            className={`rounded-full border px-3 py-1.5 text-sm transition ${
+              channel === o.key
+                ? "border-accent bg-accent/15 text-foreground"
+                : "border-border text-muted hover:text-foreground"
+            }`}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+      {channel !== "none" && (
+        <input
+          value={contact}
+          onChange={(e) => setContact(e.target.value)}
+          placeholder={channel === "email" ? "이메일 주소" : "휴대폰 번호 (010...)"}
+          className="mt-3 w-full rounded-lg border border-border bg-background/60 px-3 py-2.5 text-sm outline-none transition focus:border-accent"
+        />
+      )}
+      <button
+        onClick={onTrack}
+        disabled={tracking || (channel !== "none" && !contact.trim())}
+        className="mt-3 w-full rounded-lg bg-gradient-to-r from-accent to-accent-2 py-2.5 text-sm font-bold text-background transition hover:opacity-90 disabled:opacity-60"
+      >
+        {tracking ? "등록 중…" : "추적 시작하기"}
+      </button>
+      {!dbEnabled && (
+        <p className="mt-2 text-xs text-muted">* 추이·알림은 DB 연결 시 작동합니다.</p>
+      )}
     </div>
   );
 }

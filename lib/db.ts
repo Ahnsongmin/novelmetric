@@ -69,13 +69,27 @@ export async function getSnapshots(novelId: number, limit = 90): Promise<Snapsho
   return ((data as Snapshot[]) ?? []).reverse();
 }
 
-/** 작품 추적 등록 */
-export async function trackNovel(novelId: number, email?: string): Promise<void> {
+export type TrackOptions = { email?: string; channel?: string; contact?: string };
+
+/** 작품 추적 등록 (+ 알림 채널/연락처).
+ *  알림 컬럼이 아직 없는 DB에서도 추적은 되도록 폴백한다. */
+export async function trackNovel(novelId: number, opts: TrackOptions = {}): Promise<void> {
   const db = getDb();
   if (!db) return;
-  await db
-    .from("tracked_novels")
-    .upsert({ novel_id: novelId, email: email ?? null }, { onConflict: "novel_id,email" });
+  const email = opts.email ?? opts.contact ?? null;
+  const { error } = await db.from("tracked_novels").upsert(
+    {
+      novel_id: novelId,
+      email,
+      notify_channel: opts.channel ?? "none",
+      contact: opts.contact ?? opts.email ?? null,
+    },
+    { onConflict: "novel_id,email" }
+  );
+  if (error) {
+    // notify_channel/contact 컬럼이 없는 구버전 스키마 → 기본 필드만 저장
+    await db.from("tracked_novels").upsert({ novel_id: novelId, email }, { onConflict: "novel_id,email" });
+  }
 }
 
 /** 추적 중인 모든 작품 ID (중복 제거) */
@@ -85,4 +99,17 @@ export async function listTrackedNovelIds(): Promise<number[]> {
   const { data } = await db.from("tracked_novels").select("novel_id");
   const ids = (data ?? []).map((r: { novel_id: number }) => r.novel_id);
   return [...new Set(ids)];
+}
+
+export type TrackedPref = { novel_id: number; notify_channel: string; contact: string | null };
+
+/** 알림 받기로 한(채널!=none) 추적 작품들의 채널·연락처 */
+export async function listNotifyPrefs(): Promise<TrackedPref[]> {
+  const db = getDb();
+  if (!db) return [];
+  const { data } = await db
+    .from("tracked_novels")
+    .select("novel_id,notify_channel,contact")
+    .neq("notify_channel", "none");
+  return (data as TrackedPref[]) ?? [];
 }
