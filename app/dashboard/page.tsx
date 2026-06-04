@@ -259,6 +259,8 @@ export default function DashboardPage() {
             </p>
           </div>
 
+          <CopySummary data={data} />
+
           <Prescription data={data} />
 
           <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
@@ -316,6 +318,37 @@ function Metric({
         {unit && value !== null && <span className="ml-0.5 text-xs font-normal text-muted">{unit}</span>}
       </p>
     </div>
+  );
+}
+
+function CopySummary({ data }: { data: Resp }) {
+  const [copied, setCopied] = useState(false);
+  const s = data.stats;
+  const ret = data.retention?.adjustedRate;
+  const rank = data.benchmark?.todayBestRank;
+  const text =
+    `📊 "${s.title}" 지표 (노블메트릭)\n` +
+    (ret != null ? `연독률 ${ret}% · ` : "") +
+    `선작 ${(s.favorites ?? 0).toLocaleString("ko-KR")} · 조회 ${(s.views ?? 0).toLocaleString("ko-KR")} · 추천 ${(s.recommends ?? 0).toLocaleString("ko-KR")}\n` +
+    (rank ? `오늘 베스트 ${rank}위\n` : "") +
+    `분석 👉 https://novelmetric.vercel.app/dashboard`;
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      /* ignore */
+    }
+  }
+  return (
+    <button
+      onClick={copy}
+      className="self-start rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted transition hover:border-accent hover:text-foreground"
+    >
+      {copied ? "✓ 복사됨" : "📋 지표 요약 복사"}
+    </button>
   );
 }
 
