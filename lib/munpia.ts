@@ -166,9 +166,16 @@ export async function searchNovels(keyword: string, limit = 20): Promise<SearchH
       genre: a.querySelector(".genre")?.text.trim().replace(/\s+/g, " ") ?? "",
       cover: a.querySelector("img")?.getAttribute("src") ?? null,
     });
-    if (hits.length >= limit) break;
+    if (hits.length >= limit * 2) break; // 정렬 여유분 수집
   }
-  return hits;
+  // 제목에 키워드 토큰이 포함된 결과를 앞으로 (검색 페이지 상단 베스트 위젯 밀어내기)
+  const tokens = kw.split(/\s+/).filter((t) => t.length >= 1);
+  const score = (t: string) => {
+    if (t.includes(kw)) return 2;
+    return tokens.some((tok) => t.includes(tok)) ? 1 : 0;
+  };
+  hits.sort((a, b) => score(b.title) - score(a.title));
+  return hits.slice(0, limit);
 }
 
 // ---------- 연독률 (회차별 조회수 기반) ----------
