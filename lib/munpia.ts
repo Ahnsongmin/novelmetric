@@ -1,9 +1,10 @@
 // 문피아(munpia) 공개 데이터 수집 모듈
 // - 베스트/랭킹 리스트: mm.munpia.com (모바일, 서버렌더 HTML)
-// - 개별 작품 지표: novel.munpia.com/{novelId}
-// robots.txt 준수(랭킹/작품 페이지는 차단 대상 아님) · 요청 throttle · 공개 데이터만.
+// - 개별 작품 지표·회차·검색: www.munpia.com/api/v1 (2026-07 사이트 개편으로 구 novel.munpia.com
+//   HTML이 SPA 껍데기로 바뀌어, 그 SPA가 쓰는 공개 JSON API를 그대로 사용)
+// robots.txt 준수 · 요청 throttle · 공개 데이터만.
 
-import { parse, type HTMLElement } from "node-html-parser";
+import { parse } from "node-html-parser";
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
@@ -44,6 +45,12 @@ async function fetchHtml(url: string): Promise<string> {
   const res = await fetch(url, { headers: { "User-Agent": UA } });
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
   return res.text();
+}
+
+async function fetchJson<T>(url: string): Promise<T> {
+  const res = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" } });
+  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+  return res.json() as Promise<T>;
 }
 
 function sleep(ms: number) {
@@ -90,45 +97,41 @@ export async function fetchBest(section: BestSection = "today"): Promise<RankIte
   });
 }
 
+type MunpiaNovelInfo = {
+  title?: string;
+  genres?: string[];
+  genreBestName?: string;
+  authorName?: string;
+  chapterCount?: number;
+  viewCount?: number;
+  likeCount?: number;
+  characters?: number;
+  preferenceCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 /** 개별 작품 지표 수집 */
 export async function fetchNovel(novelId: number): Promise<NovelStats> {
-  const root = parse(await fetchHtml(`https://novel.munpia.com/${novelId}`));
-
-  // 라벨(dt) → 값(dd) 매핑
-  const labelMap = new Map<string, string>();
-  for (const dl of root.querySelectorAll("dl.meta-etc")) {
-    const dts = dl.querySelectorAll("dt");
-    const dds = dl.querySelectorAll("dd");
-    dts.forEach((dt, idx) => {
-      const v = dds[idx]?.text.trim();
-      if (v) labelMap.set(dt.text.replace(/[:\s]/g, ""), v);
-    });
-  }
-
-  const authorEl = root.querySelector("dl.meta-author dd a");
-  const favEl: HTMLElement | undefined = root
-    .querySelectorAll(".subscribe")
-    .find((s) => s.text.includes("선호작"));
-  const favorites = favEl?.parentNode?.querySelector("b")?.text ?? null;
-
-  const titleEl = root.querySelector(".title-wrap a");
-  const title = titleEl
-    ? titleEl.text.replace(titleEl.querySelector("span")?.text ?? "", "").trim()
-    : "";
+  const json = await fetchJson<{ result?: { novelInfo?: MunpiaNovelInfo } }>(
+    `https://www.munpia.com/api/v1/pc/novel-detail/${novelId}`
+  );
+  const n = json.result?.novelInfo;
+  if (!n?.title) throw new Error(`작품 ${novelId} 정보 없음(삭제·비공개 가능성)`);
 
   return {
     novelId,
-    title,
-    genre: root.querySelector(".meta-path strong")?.text.trim() ?? "",
-    author: root.querySelector("dl.meta-author strong")?.text.trim() ?? "",
-    authorId: toInt(authorEl?.getAttribute("data-no")),
-    episodes: toInt(labelMap.get("연재수")),
-    views: toInt(labelMap.get("조회수")),
-    recommends: toInt(labelMap.get("추천수")),
-    chars: toInt(labelMap.get("글자수")),
-    favorites: toInt(favorites),
-    registeredAt: labelMap.get("작품등록일") ?? null,
-    lastUpdatedAt: labelMap.get("최근연재일") ?? null,
+    title: n.title,
+    genre: n.genres?.[0] ?? n.genreBestName ?? "",
+    author: n.authorName ?? "",
+    authorId: null, // 개편 API는 작가 번호를 제공하지 않음
+    episodes: n.chapterCount ?? null,
+    views: n.viewCount ?? null,
+    recommends: n.likeCount ?? null,
+    chars: n.characters ?? null,
+    favorites: n.preferenceCount ?? null,
+    registeredAt: n.createdAt ?? null,
+    lastUpdatedAt: n.updatedAt ?? null,
     collectedAt: new Date().toISOString(),
   };
 }
@@ -143,39 +146,33 @@ export type SearchHit = {
   cover: string | null;
 };
 
-/** 제목 키워드로 문피아 작품 검색 → 후보 목록 */
+type MunpiaSearchDto = {
+  novelId?: number;
+  title?: string;
+  author?: string;
+  mainGenre?: string;
+  subGenre?: string;
+  coverUrl?: string;
+};
+
+/** 제목 키워드로 문피아 작품 검색 → 후보 목록 (유사도순 정렬은 API가 해줌) */
 export async function searchNovels(keyword: string, limit = 20): Promise<SearchHit[]> {
   const kw = keyword.trim();
   if (!kw) return [];
-  const url = `https://www.munpia.com/search?keyword=${encodeURIComponent(kw)}`;
-  const root = parse(await fetchHtml(url));
-  const anchors = root.querySelectorAll("a.item, a.hero-item");
-  const seen = new Set<number>();
-  const hits: SearchHit[] = [];
-  for (const a of anchors) {
-    const href = a.getAttribute("href") || "";
-    const id = Number(href.match(/novel\.munpia\.com\/(\d+)/)?.[1]);
-    if (!id || seen.has(id)) continue;
-    const title = a.querySelector(".title")?.text.trim() ?? "";
-    if (!title) continue;
-    seen.add(id);
-    hits.push({
-      novelId: id,
-      title,
-      author: a.querySelector(".author")?.text.trim() ?? "",
-      genre: a.querySelector(".genre")?.text.trim().replace(/\s+/g, " ") ?? "",
-      cover: a.querySelector("img")?.getAttribute("src") ?? null,
-    });
-    if (hits.length >= limit * 2) break; // 정렬 여유분 수집
-  }
-  // 제목에 키워드 토큰이 포함된 결과를 앞으로 (검색 페이지 상단 베스트 위젯 밀어내기)
-  const tokens = kw.split(/\s+/).filter((t) => t.length >= 1);
-  const score = (t: string) => {
-    if (t.includes(kw)) return 2;
-    return tokens.some((tok) => t.includes(tok)) ? 1 : 0;
-  };
-  hits.sort((a, b) => score(b.title) - score(a.title));
-  return hits.slice(0, limit);
+  const url =
+    `https://www.munpia.com/api/v1/main/search?query=${encodeURIComponent(kw)}` +
+    `&tab=NOVEL&sort=SIMILARITY&novelType=ALL&finishedOnly=false&adultMode=false&page=0&size=${limit}`;
+  const json = await fetchJson<{ result?: { searchNovelTabDtos?: MunpiaSearchDto[] } }>(url);
+  const dtos = json.result?.searchNovelTabDtos ?? [];
+  return dtos
+    .filter((d): d is MunpiaSearchDto & { novelId: number; title: string } => Boolean(d.novelId && d.title))
+    .map((d) => ({
+      novelId: d.novelId,
+      title: d.title,
+      author: d.author ?? "",
+      genre: [d.mainGenre, d.subGenre].filter(Boolean).join(" "),
+      cover: d.coverUrl ?? null,
+    }));
 }
 
 // ---------- 연독률 (회차별 조회수 기반) ----------
@@ -194,39 +191,29 @@ export type Retention = {
   dropoffs: Dropoff[]; // 회차별 급락(이탈 의심) 구간
 };
 
-/** 작품의 전체 회차별 조회수 수집 (페이지네이션). 1화→최신화 순으로 반환.
- *  문피아는 범위 밖 페이지를 마지막 페이지로 클램프하므로, 고유 neSrl로 중복 제거하고
- *  새 회차가 없으면 중단한다. */
+type MunpiaChapter = { num?: number; title?: string | number; createdAt?: string; viewCount?: number };
+
+/** 작품의 전체 회차별 조회수 수집 (JSON API 페이지네이션). 1화→최신화 순으로 반환. */
 export async function fetchEpisodes(novelId: number, maxPages = 12): Promise<Episode[]> {
-  const seen = new Set<string>();
-  const collected: { key: string; title: string; date: string; views: number | null }[] = [];
+  const eps: Episode[] = [];
   for (let p = 1; p <= maxPages; p++) {
-    const root = parse(await fetchHtml(`https://novel.munpia.com/${novelId}/page/${p}`));
-    const rows = root.querySelectorAll("#ENTRIES tbody tr");
-    let added = 0;
-    for (const r of rows) {
-      if ((r.getAttribute("class") || "").includes("notice")) continue;
-      const a = r.querySelector("td.subject a");
-      const title = a?.text.trim() ?? "";
-      if (!title) continue;
-      const href = a?.getAttribute("href") ?? "";
-      const key = (href.match(/neSrl\/(\d+)/)?.[1]) ?? `${title}|${r.querySelector("td.date")?.text.trim()}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const nums = r.querySelectorAll("td.number");
-      collected.push({
-        key,
-        title,
-        date: r.querySelector("td.date")?.text.trim() ?? "",
-        views: toInt(nums[0]?.text), // 첫 번째 number = 조회수
+    const json = await fetchJson<{ result?: { total?: number; list?: MunpiaChapter[] } }>(
+      `https://www.munpia.com/api/v1/pc/novel-detail/${novelId}/chapters?order=ENTRY_FIRST&page=${p}&size=100`
+    );
+    const list = json.result?.list ?? [];
+    for (const c of list) {
+      eps.push({
+        no: c.num ?? eps.length + 1,
+        title: String(c.title ?? ""),
+        date: (c.createdAt ?? "").slice(0, 10),
+        views: typeof c.viewCount === "number" ? c.viewCount : null,
       });
-      added++;
     }
-    if (added === 0) break; // 새 회차 없으면 끝(클램프된 중복 페이지)
-    if (p < maxPages) await sleep(500); // throttle
+    const total = json.result?.total ?? 0;
+    if (list.length === 0 || eps.length >= total) break;
+    if (p < maxPages) await sleep(300); // throttle
   }
-  collected.reverse(); // 최신→과거 → 1화→최신
-  return collected.map((e, i) => ({ no: i + 1, title: e.title, date: e.date, views: e.views }));
+  return eps;
 }
 
 /** 회차별 조회수로 연독률 계산 */
@@ -267,11 +254,12 @@ export function computeRetention(eps: Episode[]): Retention {
   };
 }
 
-/** 문피아 작품 URL 또는 숫자ID 문자열에서 novelId 추출 */
+/** 문피아 작품 URL 또는 숫자ID 문자열에서 novelId 추출
+ *  지원: novel.munpia.com/555698 · www.munpia.com/novel/detail/555698 (개편 URL) · novelno=555698 */
 export function parseNovelId(input: string): number | null {
   const s = input.trim();
   if (/^\d+$/.test(s)) return parseInt(s, 10);
-  const m = s.match(/munpia\.com\/(?:novel\/)?(\d+)/) || s.match(/novelno=(\d+)/);
+  const m = s.match(/munpia\.com\/(?:novel\/(?:detail\/)?)?(\d+)/) || s.match(/novelno=(\d+)/);
   return m ? parseInt(m[1], 10) : null;
 }
 

@@ -16,7 +16,7 @@ const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { day } = await params;
   return {
-    title: `${day} 문피아 베스트 제목 패턴 분석 | 노블메트릭`,
+    title: `${day} 문피아 베스트 제목 패턴 분석`,
     description: `${day} 문피아 투데이베스트의 후킹 클리셰 순위, 장르 분포, 제목 키워드 분석 리포트.`,
   };
 }

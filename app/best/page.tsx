@@ -5,7 +5,7 @@ import { analyzeBest } from "@/lib/analyze";
 export const revalidate = 3600; // 1시간마다 갱신(ISR)
 
 export const metadata: Metadata = {
-  title: "문피아 오늘 베스트 + 제목 패턴 분석 | 노블메트릭",
+  title: "문피아 오늘 베스트 + 제목 패턴 분석",
   description:
     "문피아 무료 투데이 베스트 실시간 순위와, 상위작 제목에 가장 많이 쓰인 후킹 키워드·장르 분포를 데이터로 분석합니다.",
 };

@@ -151,12 +151,24 @@ function diagnoseHeuristic(input: DiagnoseInput): DiagnoseResult {
   if (!/\d/.test(title)) weaknesses.push("숫자/구체적 설정(레벨·횟수·신분)을 넣으면 클릭률이 올라갑니다.");
 
   const base = title || "무제";
+  // 문장형 제목("~했다" 등)에 접두·조사 템플릿을 붙이면 문법이 깨지므로 형태별로 거른다
+  const isSentence = /[다요까자네]\s*$/.test(base);
+  const lastCode = base.charCodeAt(base.length - 1);
+  const hasBatchim = lastCode >= 0xac00 && lastCode <= 0xd7a3 && (lastCode - 0xac00) % 28 > 0;
   const titleSuggestions = [
-    { title: `회귀한 ${base}`, reason: "‘회귀’ 클리셰로 즉시 장르·대리만족 신호 부여" },
+    !isSentence && !base.includes("회귀")
+      ? { title: `회귀한 ${base}`, reason: "‘회귀’ 클리셰로 즉시 장르·대리만족 신호 부여" }
+      : { title: `3회차, ${base}`, reason: "‘N회차’ 클리셰로 반복 회귀의 기대감 부여" },
     { title: `${base} [SSS급]`, reason: "대괄호 키워드 + 등급으로 먼치킨 기대감 강화" },
-    { title: `${base}, 다시 시작합니다`, reason: "재시작 뉘앙스로 호기심 갭 형성" },
-    { title: `악역 ${base}의 사정`, reason: "‘악역’ 시점 + 미스터리로 클릭 유도" },
-    { title: `${base}을(를) 주웠다`, reason: "‘줍줍’ 사이다 클리셰로 가벼운 진입장벽" },
+    isSentence
+      ? { title: `${base}. 이번엔 다르다`, reason: "재시작 뉘앙스로 호기심 갭 형성" }
+      : { title: `${base}, 다시 시작합니다`, reason: "재시작 뉘앙스로 호기심 갭 형성" },
+    ...(!isSentence
+      ? [
+          { title: `악역 ${base}의 사정`, reason: "‘악역’ 시점 + 미스터리로 클릭 유도" },
+          { title: `${base}${hasBatchim ? "을" : "를"} 주웠다`, reason: "‘줍줍’ 사이다 클리셰로 가벼운 진입장벽" },
+        ]
+      : []),
   ];
 
   const keywords = dedupe([

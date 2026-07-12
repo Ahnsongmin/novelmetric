@@ -8,7 +8,7 @@ import { listBestDays } from "@/lib/db";
 export const revalidate = 3600;
 
 export const metadata: Metadata = {
-  title: "웹소설 트렌드 리포트 — 문피아 베스트 일일 분석 | 노블메트릭",
+  title: "웹소설 트렌드 리포트 — 문피아 베스트 일일 분석",
   description: "매일 자동 수집한 문피아 투데이베스트의 제목 패턴·후킹 키워드·장르 분포 분석 아카이브.",
 };
 
