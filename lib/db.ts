@@ -101,6 +101,38 @@ export async function listTrackedNovelIds(): Promise<number[]> {
   return [...new Set(ids)];
 }
 
+// ── 일일 베스트 아카이브 (자동 콘텐츠 엔진) ──────────────────────────────
+import type { RankItem } from "./munpia";
+
+/** 한국시간 기준 오늘 날짜(YYYY-MM-DD) */
+export function kstToday(): string {
+  return new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+}
+
+export async function saveBestDaily(day: string, items: RankItem[]): Promise<void> {
+  const db = getDb();
+  if (!db || !items.length) return;
+  await db.from("nm_best_daily").upsert({ day, items }, { onConflict: "day" });
+}
+
+export async function getBestDaily(day: string): Promise<RankItem[] | null> {
+  const db = getDb();
+  if (!db) return null;
+  const { data } = await db.from("nm_best_daily").select("items").eq("day", day).maybeSingle();
+  return (data as { items: RankItem[] } | null)?.items ?? null;
+}
+
+export async function listBestDays(limit = 90): Promise<string[]> {
+  const db = getDb();
+  if (!db) return [];
+  const { data } = await db
+    .from("nm_best_daily")
+    .select("day")
+    .order("day", { ascending: false })
+    .limit(limit);
+  return ((data as { day: string }[]) ?? []).map((r) => r.day);
+}
+
 export type TrackedPref = { novel_id: number; notify_channel: string; contact: string | null };
 
 /** 알림 받기로 한(채널!=none) 추적 작품들의 채널·연락처 */

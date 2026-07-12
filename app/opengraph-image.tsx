@@ -16,7 +16,7 @@ export default function OpengraphImage() {
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          background: "linear-gradient(135deg, #0b0a14 0%, #15132a 100%)",
+          background: "linear-gradient(135deg, #0b1220 0%, #111a2c 100%)",
           color: "#f5f3ff",
           fontFamily: "sans-serif",
         }}
@@ -33,20 +33,20 @@ export default function OpengraphImage() {
               width: 132,
               height: 132,
               borderRadius: 30,
-              background: "linear-gradient(135deg, #a78bfa, #f472b6)",
+              background: "linear-gradient(135deg, #5b9bfd, #2dd4bf)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               fontSize: 88,
               fontWeight: 800,
-              color: "#0b0a14",
+              color: "#0b1220",
             }}
           >
             N
           </div>
           <div style={{ display: "flex", flexDirection: "column" }}>
             <div style={{ fontSize: 72, fontWeight: 800, letterSpacing: -2 }}>NovelMetric</div>
-            <div style={{ fontSize: 30, color: "#a39fc7" }}>webnovel author growth analytics</div>
+            <div style={{ fontSize: 30, color: "#8ca0bd" }}>webnovel author growth analytics</div>
           </div>
         </div>
         <div

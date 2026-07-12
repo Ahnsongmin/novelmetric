@@ -8,8 +8,8 @@ export default function manifest(): MetadataRoute.Manifest {
       "내 웹소설의 연독률·선작·조회수를 자동 분석하고, 제목 클릭률을 진단하는 작가용 대시보드.",
     start_url: "/",
     display: "standalone",
-    background_color: "#0b0a14",
-    theme_color: "#0b0a14",
+    background_color: "#0b1220",
+    theme_color: "#0b1220",
     icons: [
       { src: "/icon.svg", sizes: "any", type: "image/svg+xml" },
     ],

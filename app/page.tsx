@@ -73,11 +73,14 @@ function Header() {
           <a href="/best" className="hidden rounded-full px-3 py-1.5 text-muted transition hover:text-foreground sm:block">
             베스트 분석
           </a>
-          <a href="/guide" className="hidden rounded-full px-3 py-1.5 text-muted transition hover:text-foreground sm:block">
-            가이드
+          <a href="/insights" className="hidden rounded-full px-3 py-1.5 text-muted transition hover:text-foreground sm:block">
+            트렌드
           </a>
           <a href="/dashboard" className="rounded-full px-3 py-1.5 text-muted transition hover:text-foreground">
             대시보드
+          </a>
+          <a href="/pro" className="rounded-full px-3 py-1.5 font-semibold text-accent transition hover:text-foreground">
+            Pro
           </a>
           <a
             href="#waitlist"
@@ -125,6 +128,8 @@ function DiagnoseTool() {
   const [error, setError] = useState("");
   const [result, setResult] = useState<DiagnoseResult | null>(null);
 
+  const [proRequired, setProRequired] = useState(false);
+
   async function run(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) {
@@ -132,15 +137,25 @@ function DiagnoseTool() {
       return;
     }
     setError("");
+    setProRequired(false);
     setLoading(true);
     setResult(null);
     try {
+      let passCode: string | undefined;
+      try {
+        passCode = (JSON.parse(localStorage.getItem("nm_pass") ?? "null") as { code?: string } | null)?.code;
+      } catch {}
       const res = await fetch("/api/diagnose", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, synopsis, genre, platform: "문피아" }),
+        body: JSON.stringify({ title, synopsis, genre, platform: "문피아", passCode }),
       });
       const data = await res.json();
+      if (res.status === 402) {
+        setProRequired(true);
+        setError(data.message || "무료 진단 횟수를 모두 썼어요.");
+        return;
+      }
       if (!res.ok) throw new Error(data.error || "진단 실패");
       setResult(data);
     } catch (err) {
@@ -211,6 +226,11 @@ function DiagnoseTool() {
         {error && (
           <p role="alert" className="mt-3 text-sm text-accent-2">
             {error}
+            {proRequired && (
+              <a href="/pro" className="ml-2 font-bold text-accent underline">
+                Pro 패스 보기 →
+              </a>
+            )}
           </p>
         )}
 
@@ -266,10 +286,10 @@ function ResultView({ result, title }: { result: DiagnoseResult; title: string }
     result.score >= 80
       ? "#34d399"
       : result.score >= 65
-        ? "#a78bfa"
+        ? "#5b9bfd"
         : result.score >= 50
           ? "#fbbf24"
-          : "#f472b6";
+          : "#2dd4bf";
   return (
     <div className="animate-fadeUp space-y-4">
       <div className="flex items-center gap-4">
@@ -310,7 +330,7 @@ function ResultView({ result, title }: { result: DiagnoseResult; title: string }
       <ShareButtons title={title} result={result} />
 
       <p className="pt-1 text-center text-[11px] text-muted">
-        {result.engine === "claude" ? "Claude AI 정밀 진단" : "샘플 진단(데모)"} · 더 깊은
+        {result.engine === "claude" ? "특화 AI 정밀 진단" : "샘플 진단(데모)"} · 더 깊은
         분석은 출시 후 제공됩니다 →{" "}
         <a href="#waitlist" className="text-accent underline">
           알림 신청
@@ -649,7 +669,9 @@ function Footer() {
         <a href="/dashboard" className="hover:text-foreground">대시보드</a>
         <a href="/compare" className="hover:text-foreground">작품 비교</a>
         <a href="/best" className="hover:text-foreground">베스트 분석</a>
+        <a href="/insights" className="hover:text-foreground">트렌드 리포트</a>
         <a href="/guide" className="hover:text-foreground">작가 지표 가이드</a>
+        <a href="/pro" className="hover:text-foreground">Pro 패스</a>
       </nav>
       <p>© 2026 노블메트릭(NovelMetric). 웹소설 작가를 위한 노출·성장 분석.</p>
     </footer>

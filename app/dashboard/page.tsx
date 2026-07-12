@@ -143,12 +143,20 @@ export default function DashboardPage() {
     if (!data) return;
     setTracking(true);
     try {
+      let passCode: string | undefined;
+      try {
+        passCode = (JSON.parse(localStorage.getItem("nm_pass") ?? "null") as { code?: string } | null)?.code;
+      } catch {}
       const res = await fetch("/api/novel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ q: String(data.stats.novelId), channel, contact }),
+        body: JSON.stringify({ q: String(data.stats.novelId), channel, contact, passCode }),
       });
       const json = await res.json();
+      if (res.status === 402) {
+        setError(`${json.message || "무료 추적 한도에 도달했어요."} → 메뉴의 Pro 패스에서 업그레이드`);
+        return;
+      }
       if (!res.ok) throw new Error(json.error || "추적 실패");
       setTracked(true);
     } catch (err) {
@@ -495,7 +503,7 @@ function BenchmarkCard({ b }: { b: Benchmark }) {
   const ratioText = (r: number | null) =>
     r === null ? "-" : r >= 1 ? `${r}배 높음` : `${Math.round(r * 100)}% 수준`;
   const ratioColor = (r: number | null) =>
-    r === null ? "#a39fc7" : r >= 1.2 ? "#34d399" : r >= 0.8 ? "#a78bfa" : "#fbbf24";
+    r === null ? "#8ca0bd" : r >= 1.2 ? "#34d399" : r >= 0.8 ? "#5b9bfd" : "#fbbf24";
   return (
     <div className="rounded-xl border border-border bg-card/40 p-4">
       <div className="flex items-baseline justify-between">
@@ -558,7 +566,7 @@ function SunjakBenchmark({ favorites }: { favorites: number | null }) {
 function RetentionPanel({ r }: { r: Retention }) {
   const rate = r.adjustedRate ?? r.cumulativeRate;
   const color =
-    rate === null ? "#a39fc7" : rate >= 70 ? "#34d399" : rate >= 60 ? "#a78bfa" : rate >= 45 ? "#fbbf24" : "#f472b6";
+    rate === null ? "#8ca0bd" : rate >= 70 ? "#34d399" : rate >= 60 ? "#5b9bfd" : rate >= 45 ? "#fbbf24" : "#2dd4bf";
   const eps = r.episodes.filter((e): e is Episode & { views: number } => e.views !== null);
 
   // 회차별 조회수 라인

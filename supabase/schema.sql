@@ -59,3 +59,23 @@ alter table public.tracked_novels add column if not exists contact text;
 alter table public.novels enable row level security;
 alter table public.snapshots enable row level security;
 alter table public.tracked_novels enable row level security;
+
+-- Phase 2: 일일 베스트 아카이브 (자동 콘텐츠/SEO 엔진) -------------------------
+-- Cron이 매일 오늘베스트를 저장 → /insights/[day] 페이지가 자동으로 쌓인다.
+create table if not exists public.nm_best_daily (
+  day date primary key,
+  items jsonb not null,    -- RankItem[] 원본
+  created_at timestamptz not null default now()
+);
+alter table public.nm_best_daily enable row level security;
+
+-- Phase 2: Pro 패스 (30일 이용권, 토스 결제) ----------------------------------
+create table if not exists public.nm_pass (
+  code text primary key,           -- NM-XXXXXXXXXXXX (결제 후 발급, 로그인 대신 사용)
+  order_id text not null unique,   -- 토스 orderId (중복 발급 방지)
+  payment_key text not null,
+  amount integer not null,
+  expires_at timestamptz not null, -- 발급 + 30일
+  created_at timestamptz not null default now()
+);
+alter table public.nm_pass enable row level security;

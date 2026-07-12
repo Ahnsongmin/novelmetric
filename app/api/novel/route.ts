@@ -10,6 +10,7 @@ import {
 } from "@/lib/munpia";
 import { computeBenchmark } from "@/lib/analyze";
 import { getSnapshots, saveSnapshot, trackNovel, dbEnabled } from "@/lib/db";
+import { passEnabled, passValidUntil, trackedCountByEmail, FREE_TRACK_LIMIT } from "@/lib/pass";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -44,9 +45,9 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/novel { q, channel?, contact? } → 추적 등록 + 첫 스냅샷 적재
+// POST /api/novel { q, channel?, contact?, passCode? } → 추적 등록 + 첫 스냅샷 적재
 export async function POST(req: NextRequest) {
-  let body: { q?: string; channel?: string; contact?: string };
+  let body: { q?: string; channel?: string; contact?: string; passCode?: string };
   try {
     body = await req.json();
   } catch {
@@ -57,6 +58,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "작품 URL/ID가 올바르지 않습니다." }, { status: 400 });
   }
   const channel = ["email", "kakao"].includes(body.channel || "") ? body.channel : "none";
+
+  // 무료는 이메일당 1작품 추적 — Pro 패스면 무제한. 결제 env 없으면 제한 없음.
+  if (passEnabled() && body.contact && !(await passValidUntil(body.passCode))) {
+    const count = await trackedCountByEmail(body.contact, novelId);
+    if (count >= FREE_TRACK_LIMIT) {
+      return NextResponse.json(
+        { error: "PRO_REQUIRED", message: `무료는 ${FREE_TRACK_LIMIT}작품까지 추적할 수 있어요. Pro 패스로 무제한 추적하세요.` },
+        { status: 402 },
+      );
+    }
+  }
   try {
     const stats = await fetchNovel(novelId);
     await saveSnapshot(stats); // DB 없으면 no-op

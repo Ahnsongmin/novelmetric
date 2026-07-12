@@ -1,14 +1,15 @@
 @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendard-dynamic-subset.css");
 @import "tailwindcss";
 
+/* 깔끔한 신뢰형 다크 — 딥 네이비 캔버스 + 신뢰 블루 / 민트(성장·데이터) 액센트 */
 :root {
-  --background: #0b0a14;
-  --foreground: #f5f3ff;
-  --muted: #a39fc7;
-  --accent: #a78bfa;
-  --accent-2: #f472b6;
-  --card: #15132a;
-  --border: #2a2742;
+  --background: #0b1220;
+  --foreground: #edf2f9;
+  --muted: #8ca0bd;
+  --accent: #5b9bfd;
+  --accent-2: #2dd4bf;
+  --card: #111a2c;
+  --border: #1f2b43;
 }
 
 @theme inline {
@@ -27,13 +28,14 @@ html {
 
 body {
   background:
-    radial-gradient(1100px 600px at 80% -10%, rgba(167, 139, 250, 0.18), transparent 60%),
-    radial-gradient(900px 500px at 0% 10%, rgba(244, 114, 182, 0.12), transparent 55%),
+    radial-gradient(1100px 600px at 80% -10%, rgba(91, 155, 253, 0.14), transparent 60%),
+    radial-gradient(900px 500px at 0% 10%, rgba(45, 212, 191, 0.08), transparent 55%),
     var(--background);
   color: var(--foreground);
   font-family:
     "Pretendard", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
     "Malgun Gothic", system-ui, sans-serif;
+  letter-spacing: -0.01em;
   -webkit-font-smoothing: antialiased;
 }
 

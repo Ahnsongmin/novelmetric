@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchNovel } from "@/lib/munpia";
+import { fetchNovel, fetchBest } from "@/lib/munpia";
 import {
   listTrackedNovelIds,
   listNotifyPrefs,
   getSnapshots,
   saveSnapshot,
+  saveBestDaily,
+  kstToday,
   dbEnabled,
 } from "@/lib/db";
 import { detectAlerts, digestText } from "@/lib/alerts";
@@ -25,6 +27,16 @@ export async function GET(req: NextRequest) {
   }
   if (!dbEnabled()) {
     return NextResponse.json({ ok: false, reason: "DB 미연결(Supabase 키 없음)" });
+  }
+
+  // 오늘 베스트 아카이브 — /insights 자동 콘텐츠의 원천
+  let bestSaved = false;
+  try {
+    const best = await fetchBest("today");
+    await saveBestDaily(kstToday(), best);
+    bestSaved = best.length > 0;
+  } catch {
+    // 베스트 수집 실패해도 추적 수집은 계속
   }
 
   const ids = await listTrackedNovelIds();
@@ -70,6 +82,7 @@ export async function GET(req: NextRequest) {
     failed: errors.length,
     total: ids.length,
     notified,
+    bestSaved,
   });
 }
 

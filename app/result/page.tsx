@@ -14,7 +14,7 @@ export default function ResultPage() {
   }, []);
 
   const color =
-    !params ? "#a78bfa" : params.s >= 80 ? "#34d399" : params.s >= 65 ? "#a78bfa" : params.s >= 50 ? "#fbbf24" : "#f472b6";
+    !params ? "#5b9bfd" : params.s >= 80 ? "#34d399" : params.s >= 65 ? "#5b9bfd" : params.s >= 50 ? "#fbbf24" : "#2dd4bf";
 
   return (
     <main className="mx-auto flex max-w-lg flex-1 flex-col items-center justify-center px-5 py-16 text-center">
