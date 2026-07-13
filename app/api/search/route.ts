@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { searchNovels } from "@/lib/munpia";
+import { searchAllPlatforms } from "@/lib/platform";
 
 export const runtime = "nodejs";
 export const maxDuration = 20;
 
-// GET /api/search?q=제목키워드 → 작품 후보 목록
+// GET /api/search?q=제목키워드 → 문피아·노벨피아 동시 검색 후보 목록
 export async function GET(req: NextRequest) {
   const q = (req.nextUrl.searchParams.get("q") || "").trim();
   if (q.length < 2) {
     return NextResponse.json({ error: "두 글자 이상 입력해 주세요." }, { status: 400 });
   }
   try {
-    const hits = await searchNovels(q);
+    const hits = await searchAllPlatforms(q);
     return NextResponse.json({ hits });
   } catch (e) {
     console.error("[api/search]", e);

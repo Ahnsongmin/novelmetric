@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchNovel, fetchBest } from "@/lib/munpia";
+import { fetchBest } from "@/lib/munpia";
+import { fetchNovelAny } from "@/lib/platform";
 import {
   listTrackedNovelIds,
   listNotifyPrefs,
@@ -44,7 +45,7 @@ export async function GET(req: NextRequest) {
   const errors: number[] = [];
   for (const id of ids) {
     try {
-      const stats = await fetchNovel(id);
+      const stats = await fetchNovelAny(id);
       await saveSnapshot(stats);
       ok++;
       await sleep(800); // throttle
@@ -62,7 +63,7 @@ export async function GET(req: NextRequest) {
     if (snaps.length < 2) continue;
     const flags = detectAlerts(snaps[snaps.length - 2], snaps[snaps.length - 1]);
     if (!flags.length) continue;
-    const stats = await fetchNovel(p.novel_id).catch(() => null);
+    const stats = await fetchNovelAny(p.novel_id).catch(() => null);
     const title = stats?.title ?? `작품 ${p.novel_id}`;
     const body = digestText({
       novelId: p.novel_id,

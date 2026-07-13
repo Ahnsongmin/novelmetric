@@ -1,45 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  fetchNovel,
-  fetchEpisodes,
-  fetchBest,
-  computeRetention,
-  parseNovelId,
-  type Episode,
-  type RankItem,
-} from "@/lib/munpia";
+import { fetchBest, computeRetention, type Episode, type RankItem } from "@/lib/munpia";
+import { parseQuery, platformOf, fetchNovelAny, fetchEpisodesAny } from "@/lib/platform";
 import { computeBenchmark } from "@/lib/analyze";
 import { getSnapshots, saveSnapshot, trackNovel, dbEnabled } from "@/lib/db";
 import { passEnabled, passValidUntil, trackedCountByEmail, FREE_TRACK_LIMIT } from "@/lib/pass";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
-// GET /api/novel?q=<문피아 URL 또는 작품ID>
+// GET /api/novel?q=<문피아·노벨피아 URL 또는 작품ID>
 // 라이브 지표 + (DB 연결 시) 추이 스냅샷 반환
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get("q") || "";
-  const novelId = parseNovelId(q);
+  const novelId = parseQuery(q);
   if (!novelId) {
     return NextResponse.json(
-      { error: "문피아 작품 URL 또는 작품 ID를 입력해 주세요. 예) novel.munpia.com/555698" },
+      { error: "문피아·노벨피아 작품 URL 또는 작품 ID를 입력해 주세요. 예) novelpia.com/novel/300000" },
       { status: 400 }
     );
   }
+  const isMunpia = platformOf(novelId) === "munpia";
   try {
     const [stats, eps, history, best] = await Promise.all([
-      fetchNovel(novelId),
-      fetchEpisodes(novelId).catch(() => [] as Episode[]),
+      fetchNovelAny(novelId),
+      fetchEpisodesAny(novelId).catch(() => [] as Episode[]),
       getSnapshots(novelId),
-      fetchBest("today").catch(() => [] as RankItem[]),
+      // 투베 벤치마크는 문피아 기준 — 노벨피아 작품엔 미적용
+      isMunpia ? fetchBest("today").catch(() => [] as RankItem[]) : Promise.resolve([] as RankItem[]),
     ]);
     const retention = eps.length ? computeRetention(eps) : null;
-    const benchmark = computeBenchmark(stats, best);
+    const benchmark = isMunpia ? computeBenchmark(stats, best) : null;
     return NextResponse.json({ stats, retention, benchmark, history, dbEnabled: dbEnabled() });
   } catch (e) {
     console.error("[api/novel]", e);
     return NextResponse.json(
-      { error: "작품 정보를 가져오지 못했어요. 작품 ID를 확인해 주세요." },
+      { error: "작품 정보를 가져오지 못했어요. 작품 ID를 확인해 주세요. (성인작품은 지원되지 않아요)" },
       { status: 502 }
     );
   }
@@ -53,7 +48,7 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 });
   }
-  const novelId = parseNovelId(body.q || "");
+  const novelId = parseQuery(body.q || "");
   if (!novelId) {
     return NextResponse.json({ error: "작품 URL/ID가 올바르지 않습니다." }, { status: 400 });
   }
@@ -70,7 +65,7 @@ export async function POST(req: NextRequest) {
     }
   }
   try {
-    const stats = await fetchNovel(novelId);
+    const stats = await fetchNovelAny(novelId);
     await saveSnapshot(stats); // DB 없으면 no-op
     await trackNovel(novelId, { channel, contact: body.contact });
     return NextResponse.json({ ok: true, tracked: dbEnabled(), stats });

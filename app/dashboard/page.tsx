@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 type Stats = {
   novelId: number;
+  platform?: "munpia" | "novelpia";
   title: string;
   genre: string;
   author: string;
@@ -53,11 +54,19 @@ type Resp = {
 
 type SearchHit = {
   novelId: number;
+  platform?: "munpia" | "novelpia";
   title: string;
   author: string;
   genre: string;
   cover: string | null;
 };
+
+const NOVELPIA_ID_BASE = 1_000_000_000;
+const PLATFORM_LABEL = { munpia: "문피아", novelpia: "노벨피아" } as const;
+
+function displayId(id: number) {
+  return id >= NOVELPIA_ID_BASE ? id - NOVELPIA_ID_BASE : id;
+}
 
 // 투베 진입 적기 벤치마크 (작가 통념: 선작 200)
 const SUNJAK_BENCHMARK = 200;
@@ -117,8 +126,8 @@ export default function DashboardPage() {
     e.preventDefault();
     const term = q.trim();
     if (!term) return;
-    // ID(숫자) 또는 문피아 URL이면 바로 분석, 아니면 제목 검색
-    if (/^\d+$/.test(term) || /munpia\.com\/\d+/.test(term)) {
+    // ID(숫자) 또는 문피아·노벨피아 URL이면 바로 분석, 아니면 제목 검색
+    if (/^\d+$/.test(term) || /munpia\.com\/.*\d+/.test(term) || /novelpia\.com\/novel\/\d+/.test(term)) {
       analyzeById(term);
       return;
     }
@@ -173,7 +182,7 @@ export default function DashboardPage() {
       </a>
       <h1 className="mt-3 text-2xl font-bold md:text-3xl">작품 성장 대시보드</h1>
       <p className="mt-1.5 text-muted">
-        <b className="text-foreground">작품 제목</b>으로 검색하거나 문피아 URL·작품 ID를 넣으면, 연독률·선작·조회수를
+        <b className="text-foreground">작품 제목</b>으로 검색하거나 문피아·노벨피아 URL을 넣으면, 연독률·선작·조회수를
         자동 계산하고 투베 진입 게이지·추이를 보여줍니다.
       </p>
 
@@ -181,8 +190,8 @@ export default function DashboardPage() {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="작품 제목 검색 (예: 나 혼자 마법사)  또는  URL·ID"
-          aria-label="작품 제목 검색 또는 문피아 URL·작품 ID"
+          placeholder="작품 제목 검색  또는  문피아·노벨피아 URL"
+          aria-label="작품 제목 검색 또는 문피아·노벨피아 URL·작품 ID"
           className="flex-1 rounded-lg border border-border bg-background/60 px-4 py-3 text-sm outline-none transition focus:border-accent"
         />
         <button
@@ -245,6 +254,11 @@ export default function DashboardPage() {
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-semibold">{h.title}</span>
                     <span className="block truncate text-xs text-muted">
+                      {h.platform && (
+                        <span className="mr-1.5 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-bold text-accent">
+                          {PLATFORM_LABEL[h.platform]}
+                        </span>
+                      )}
                       {h.genre} · {h.author}
                     </span>
                   </span>
@@ -263,7 +277,8 @@ export default function DashboardPage() {
             </p>
             <h2 className="text-xl font-bold">{data.stats.title}</h2>
             <p className="mt-0.5 text-xs text-muted">
-              최근 연재일 {data.stats.lastUpdatedAt ?? "-"} · 작품ID {data.stats.novelId}
+              {data.stats.platform ? `${PLATFORM_LABEL[data.stats.platform]} · ` : ""}
+              최근 연재일 {data.stats.lastUpdatedAt ?? "-"} · 작품ID {displayId(data.stats.novelId)}
             </p>
           </div>
 
@@ -281,7 +296,7 @@ export default function DashboardPage() {
 
           {data.benchmark && <BenchmarkCard b={data.benchmark} />}
 
-          <SunjakBenchmark favorites={data.stats.favorites} />
+          {data.stats.platform !== "novelpia" && <SunjakBenchmark favorites={data.stats.favorites} />}
 
           {data.retention && <RetentionPanel r={data.retention} />}
 

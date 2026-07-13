@@ -5,6 +5,7 @@
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { NovelStats } from "./munpia";
+import { platformOf } from "./platform";
 
 let cached: SupabaseClient | null | undefined;
 
@@ -36,7 +37,7 @@ export async function saveSnapshot(s: NovelStats): Promise<void> {
   await db.from("novels").upsert(
     {
       novel_id: s.novelId,
-      platform: "munpia",
+      platform: platformOf(s.novelId),
       title: s.title,
       genre: s.genre,
       author: s.author,

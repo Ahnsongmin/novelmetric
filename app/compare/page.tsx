@@ -27,7 +27,7 @@ export default function ComparePage() {
   async function compare(e: React.FormEvent) {
     e.preventDefault();
     if (!qa.trim() || !qb.trim()) {
-      setError("두 작품 모두 입력해 주세요. (작품 ID 또는 문피아 URL)");
+      setError("두 작품 모두 입력해 주세요. (작품 ID 또는 문피아·노벨피아 URL)");
       return;
     }
     setError("");
@@ -57,7 +57,7 @@ export default function ComparePage() {
       </a>
       <h1 className="mt-3 text-2xl font-bold md:text-3xl">작품 비교</h1>
       <p className="mt-1.5 text-muted">
-        내 작품과 경쟁작을 나란히 비교하세요. 연독률·선작·조회수·추천을 한눈에. (작품 ID 또는 문피아 URL)
+        내 작품과 경쟁작을 나란히 비교하세요. 연독률·선작·조회수·추천을 한눈에. (작품 ID 또는 문피아·노벨피아 URL)
       </p>
 
       <form onSubmit={compare} className="mt-6 space-y-2">
