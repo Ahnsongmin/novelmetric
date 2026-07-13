@@ -1,40 +1,73 @@
 import type { Metadata } from "next";
-import { fetchBest, type RankItem } from "@/lib/munpia";
+import Link from "next/link";
+import { fetchBest100WithViews, type RankItem } from "@/lib/munpia";
+import { fetchTop100 } from "@/lib/novelpia";
 import { analyzeBest } from "@/lib/analyze";
 
 export const revalidate = 3600; // 1시간마다 갱신(ISR)
 
 export const metadata: Metadata = {
-  title: "문피아 오늘 베스트 + 제목 패턴 분석",
+  title: "문피아·노벨피아 오늘 베스트 TOP100 + 제목 패턴 분석",
   description:
-    "문피아 무료 투데이 베스트 실시간 순위와, 상위작 제목에 가장 많이 쓰인 후킹 키워드·장르 분포를 데이터로 분석합니다.",
+    "문피아 투데이베스트·노벨피아 TOP100 실시간 순위와, 상위작 제목에 가장 많이 쓰인 후킹 키워드·장르 분포를 데이터로 분석합니다.",
 };
 
-function fmt(n: number | null) {
-  return n === null ? "-" : n.toLocaleString("ko-KR");
+function fmt(n: number | null | undefined) {
+  return n == null ? "-" : n.toLocaleString("ko-KR");
 }
 
-export default async function BestPage() {
+type Props = { searchParams: Promise<{ p?: string }> };
+
+export default async function BestPage({ searchParams }: Props) {
+  const { p } = await searchParams;
+  const platform = p === "novelpia" ? "novelpia" : "munpia";
+
   let items: RankItem[] = [];
   let failed = false;
   try {
-    items = await fetchBest("today");
+    items = platform === "novelpia" ? await fetchTop100() : await fetchBest100WithViews();
   } catch {
     failed = true;
   }
   const a = analyzeBest(items);
   const hookLift =
     a.avgViewsNoHook > 0 ? Math.round((a.avgViewsWithHook / a.avgViewsNoHook) * 10) / 10 : null;
+  const isNovelpia = platform === "novelpia";
 
   return (
     <main className="mx-auto max-w-4xl flex-1 px-5 py-10">
       <a href="/" className="text-sm text-muted hover:text-foreground">
         ← 노블메트릭
       </a>
-      <h1 className="mt-3 text-2xl font-bold md:text-3xl">문피아 오늘 베스트 · 제목 패턴 분석</h1>
+      <h1 className="mt-3 text-2xl font-bold md:text-3xl">오늘 베스트 TOP100 · 제목 패턴 분석</h1>
       <p className="mt-1.5 text-muted">
-        무료 투데이 베스트 상위작을 수집해, 잘 팔리는 제목의 공통점을 데이터로 보여드립니다. (1시간마다 갱신)
+        {isNovelpia ? "노벨피아 TOP100" : "문피아 투데이베스트 TOP100"}을 수집해, 잘 팔리는 제목의
+        공통점을 데이터로 보여드립니다. (1시간마다 갱신)
       </p>
+
+      {/* 플랫폼 탭 */}
+      <div className="mt-5 flex gap-2">
+        <Link
+          href="/best"
+          className={`rounded-full border px-4 py-2 text-sm font-bold transition ${
+            !isNovelpia
+              ? "border-accent bg-accent/15 text-foreground"
+              : "border-border text-muted hover:text-foreground"
+          }`}
+        >
+          문피아
+        </Link>
+        <Link
+          href="/best?p=novelpia"
+          className={`rounded-full border px-4 py-2 text-sm font-bold transition ${
+            isNovelpia
+              ? "border-accent bg-accent/15 text-foreground"
+              : "border-border text-muted hover:text-foreground"
+          }`}
+        >
+          노벨피아
+        </Link>
+      </div>
 
       {failed && (
         <p className="mt-6 rounded-lg border border-accent-2/40 bg-accent-2/10 p-4 text-sm">
@@ -54,10 +87,19 @@ export default async function BestPage() {
               {a.genres[0]?.name ?? "-"}{" "}
               <span className="text-sm text-muted">({a.genres[0]?.count ?? 0}작)</span>
             </Card>
-            <Card title="후킹 키워드 있는 제목의 조회수">
-              {hookLift ? `평균 ${hookLift}배` : "-"}
-              <span className="block text-xs font-normal text-muted">후킹 없는 제목 대비</span>
-            </Card>
+            {hookLift ? (
+              <Card title="후킹 키워드 있는 제목의 조회수">
+                평균 {hookLift}배
+                <span className="block text-xs font-normal text-muted">후킹 없는 제목 대비</span>
+              </Card>
+            ) : (
+              <Card title="분석 표본">
+                TOP {a.total}
+                <span className="block text-xs font-normal text-muted">
+                  {isNovelpia ? "노벨피아 실시간 랭킹" : "문피아 투데이베스트"}
+                </span>
+              </Card>
+            )}
           </section>
 
           {/* 후킹 클리셰 빈도 */}
@@ -101,7 +143,9 @@ export default async function BestPage() {
 
           {/* 베스트 표 */}
           <section className="mt-9">
-            <h2 className="text-lg font-bold">📈 오늘의 베스트 TOP {items.length}</h2>
+            <h2 className="text-lg font-bold">
+              📈 {isNovelpia ? "노벨피아" : "문피아"} 베스트 TOP {items.length}
+            </h2>
             <div className="mt-3 overflow-x-auto rounded-xl border border-border">
               <table className="w-full text-sm">
                 <thead className="bg-card/60 text-muted">
@@ -109,8 +153,12 @@ export default async function BestPage() {
                     <th className="px-3 py-2 text-left">#</th>
                     <th className="px-3 py-2 text-left">제목</th>
                     <th className="px-3 py-2 text-left">장르</th>
-                    <th className="px-3 py-2 text-right">조회수</th>
-                    <th className="px-3 py-2 text-right">추천수</th>
+                    <th className="px-3 py-2 text-left">작가</th>
+                    {isNovelpia ? (
+                      <th className="px-3 py-2 text-right">선호</th>
+                    ) : (
+                      <th className="px-3 py-2 text-right">조회수</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -119,13 +167,18 @@ export default async function BestPage() {
                       <td className="px-3 py-2 font-bold text-accent">{it.rank}</td>
                       <td className="px-3 py-2">{it.title}</td>
                       <td className="px-3 py-2 text-muted">{it.genre}</td>
-                      <td className="px-3 py-2 text-right">{fmt(it.views)}</td>
-                      <td className="px-3 py-2 text-right">{fmt(it.recommends)}</td>
+                      <td className="px-3 py-2 text-muted">{it.author}</td>
+                      <td className="px-3 py-2 text-right">
+                        {isNovelpia ? fmt(it.favorites) : fmt(it.views)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            {!isNovelpia && (
+              <p className="mt-2 text-xs text-muted">* 조회수는 상위 10위까지 제공됩니다.</p>
+            )}
           </section>
 
           <div className="mt-10 rounded-2xl border border-border bg-card/40 p-6 text-center">

@@ -20,6 +20,7 @@ export type RankItem = {
   recommends: number | null; // 추천수
   synopsis: string;
   cover: string | null;
+  favorites?: number | null; // 선호작수 (노벨피아 top100 제공)
 };
 
 export type NovelStats = {
@@ -41,8 +42,11 @@ export type NovelStats = {
 const BEST_SECTIONS = ["today", "week", "month", "total"] as const;
 export type BestSection = (typeof BEST_SECTIONS)[number];
 
-async function fetchHtml(url: string): Promise<string> {
-  const res = await fetch(url, { headers: { "User-Agent": UA } });
+// cacheSecs: Next fetch 데이터 캐시(초). 베스트 등 트래픽 몰리는 페이지만 사용 — 작품 지표는 실시간 유지.
+async function fetchHtml(url: string, cacheSecs?: number): Promise<string> {
+  const init: RequestInit = { headers: { "User-Agent": UA } };
+  if (cacheSecs) (init as { next?: { revalidate: number } }).next = { revalidate: cacheSecs };
+  const res = await fetch(url, init);
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
   return res.text();
 }
@@ -94,6 +98,59 @@ export async function fetchBest(section: BestSection = "today"): Promise<RankIte
       synopsis: li.querySelector(".detail p")?.text.trim() ?? "",
       cover: li.querySelector("img")?.getAttribute("src") ?? null,
     };
+  });
+}
+
+/** 투데이 베스트 TOP100 — www.munpia.com/best/today (SSR HTML, 순위·제목·장르·작가).
+ *  조회수는 이 페이지에 없어 상위 10위는 fetchBest(모바일)에서 병합한다. */
+export async function fetchBest100(): Promise<RankItem[]> {
+  const html = await fetchHtml("https://www.munpia.com/best/today", 1800);
+  const chunks = html.split(/<a href="https:\/\/www\.munpia\.com\/novel\/detail\//).slice(1);
+
+  const seen = new Set<number>();
+  const items: RankItem[] = [];
+  for (const chunk of chunks) {
+    const id = chunk.match(/^(\d+)/)?.[1];
+    if (!id) continue;
+    const novelId = parseInt(id, 10);
+    if (seen.has(novelId)) continue;
+
+    const rank =
+      chunk.match(/class="rank-num">\s*<span>(\d+)<\/span>/)?.[1] ??
+      chunk.match(/class="month">(\d+)/)?.[1];
+    const titleBlock = chunk.match(/class="novel-title">([\s\S]*?)<\/div>/)?.[1] ?? "";
+    const title = titleBlock.match(/<span>([^<]+)<\/span>\s*$/)?.[1]?.trim() ?? "";
+    if (!rank || !title) continue;
+
+    seen.add(novelId);
+    items.push({
+      rank: parseInt(rank, 10),
+      novelId,
+      title,
+      genre: chunk.match(/class="novel-genre">\s*<span>([^<]*)<\/span>/)?.[1]?.trim() ?? "",
+      author: chunk.match(/class="novel-author">([^<]*)</)?.[1]?.trim() ?? "",
+      episodes: null,
+      views: null,
+      recommends: null,
+      synopsis: "",
+      cover: chunk.match(/<img src="([^"]+)"/)?.[1] ?? null,
+    });
+  }
+  items.sort((a, b) => a.rank - b.rank);
+  return items.filter((it) => it.rank <= 100);
+}
+
+/** TOP100 + 상위권 조회수 병합 (모바일 베스트의 조회·추천을 같은 작품에 매칭) */
+export async function fetchBest100WithViews(): Promise<RankItem[]> {
+  const [top100, top10] = await Promise.all([
+    fetchBest100(),
+    fetchBest("today").catch(() => [] as RankItem[]),
+  ]);
+  if (!top10.length) return top100;
+  const byId = new Map(top10.filter((t) => t.novelId).map((t) => [t.novelId, t]));
+  return top100.map((it) => {
+    const src = it.novelId ? byId.get(it.novelId) : undefined;
+    return src ? { ...it, views: src.views, recommends: src.recommends, episodes: src.episodes } : it;
   });
 }
 

@@ -22,6 +22,7 @@ export const metadata: Metadata = {
     "투베",
     "선작",
     "문피아",
+    "노벨피아",
     "웹소설 제목",
     "웹소설 작가 도구",
   ],

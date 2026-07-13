@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchBest } from "@/lib/munpia";
+import { fetchBest100WithViews, type RankItem } from "@/lib/munpia";
+import { fetchTop100 } from "@/lib/novelpia";
 import { fetchNovelAny } from "@/lib/platform";
 import {
   listTrackedNovelIds,
@@ -30,12 +31,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, reason: "DB 미연결(Supabase 키 없음)" });
   }
 
-  // 오늘 베스트 아카이브 — /insights 자동 콘텐츠의 원천
+  // 오늘 베스트 아카이브 (문피아·노벨피아 TOP100) — /insights 자동 콘텐츠의 원천
   let bestSaved = false;
   try {
-    const best = await fetchBest("today");
-    await saveBestDaily(kstToday(), best);
-    bestSaved = best.length > 0;
+    const [munpia, novelpia] = await Promise.all([
+      fetchBest100WithViews().catch(() => [] as RankItem[]),
+      fetchTop100().catch(() => [] as RankItem[]),
+    ]);
+    await saveBestDaily(kstToday(), { munpia, novelpia });
+    bestSaved = munpia.length > 0 || novelpia.length > 0;
   } catch {
     // 베스트 수집 실패해도 추적 수집은 계속
   }

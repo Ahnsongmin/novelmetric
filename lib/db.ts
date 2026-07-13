@@ -110,17 +110,23 @@ export function kstToday(): string {
   return new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
 }
 
-export async function saveBestDaily(day: string, items: RankItem[]): Promise<void> {
+/** 일일 베스트 — 플랫폼별 분리 저장. (2026-07-14 이전 데이터는 문피아 단독 배열) */
+export type BestDaily = { munpia: RankItem[]; novelpia: RankItem[] };
+
+export async function saveBestDaily(day: string, data: BestDaily): Promise<void> {
   const db = getDb();
-  if (!db || !items.length) return;
-  await db.from("nm_best_daily").upsert({ day, items }, { onConflict: "day" });
+  if (!db || (!data.munpia.length && !data.novelpia.length)) return;
+  await db.from("nm_best_daily").upsert({ day, items: data }, { onConflict: "day" });
 }
 
-export async function getBestDaily(day: string): Promise<RankItem[] | null> {
+export async function getBestDaily(day: string): Promise<BestDaily | null> {
   const db = getDb();
   if (!db) return null;
   const { data } = await db.from("nm_best_daily").select("items").eq("day", day).maybeSingle();
-  return (data as { items: RankItem[] } | null)?.items ?? null;
+  const items = (data as { items: RankItem[] | BestDaily } | null)?.items;
+  if (!items) return null;
+  if (Array.isArray(items)) return { munpia: items, novelpia: [] }; // 구버전 호환
+  return { munpia: items.munpia ?? [], novelpia: items.novelpia ?? [] };
 }
 
 export async function listBestDays(limit = 90): Promise<string[]> {
