@@ -60,8 +60,8 @@ function ProContent() {
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const TossPayments = (window as any).TossPayments;
-      const payments = TossPayments(gate.clientKey).payments({ customerKey: TossPayments.ANONYMOUS });
-      await payments.requestPayment({
+      const payment = TossPayments(gate.clientKey).payment({ customerKey: TossPayments.ANONYMOUS });
+      await payment.requestPayment({
         method: "CARD",
         amount: { currency: "KRW", value: gate.pass.amount },
         orderId: `nmpass-${crypto.randomUUID().replace(/-/g, "").slice(0, 20)}`,
