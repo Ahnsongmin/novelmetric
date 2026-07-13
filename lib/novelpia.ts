@@ -2,7 +2,9 @@
 // - 작품 지표: novelpia.com/novel/{id} (서버렌더 HTML)
 // - 회차 리스트: POST /proc/episode_list (HTML 조각) + 회차별 조회수 POST /proc/novel(get_episode_count_view, JSON)
 // - 검색: GET /proc/novel?cmd=novel_search (JSON — block_out=0 등 숫자 파라미터 필수)
-// robots 준수 · 요청 throttle · 공개 데이터만. 성인(19금) 작품은 로그인 필요라 미지원.
+// robots 준수 · 요청 throttle · 공개 데이터만.
+// 성인(19금) 작품은 로그인 세션 필요 → NOVELPIA_COOKIE env(LOGINKEY=...; USERKEY=...)가 있으면
+// 모든 요청에 쿠키를 실어 성인 데이터까지 수집한다. 없으면 비로그인(공개작만).
 
 import { parse } from "node-html-parser";
 import type { NovelStats, Episode, SearchHit, RankItem } from "./munpia";
@@ -11,6 +13,22 @@ const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 
 const BASE = "https://novelpia.com";
+
+/** 로그인 쿠키(있으면 성인작품 열람). Vercel env NOVELPIA_COOKIE = "LOGINKEY=...; USERKEY=..." */
+function authCookie(): string | undefined {
+  return process.env.NOVELPIA_COOKIE?.trim() || undefined;
+}
+
+export function hasNovelpiaAuth(): boolean {
+  return Boolean(authCookie());
+}
+
+function baseHeaders(extra?: Record<string, string>): Record<string, string> {
+  const h: Record<string, string> = { "User-Agent": UA, ...extra };
+  const cookie = authCookie();
+  if (cookie) h["Cookie"] = cookie;
+  return h;
+}
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
@@ -24,7 +42,7 @@ function toInt(s: string | undefined | null): number | null {
 
 // cacheSecs: Next fetch 데이터 캐시(초). top100 등 트래픽 몰리는 페이지만 사용 — 작품 지표는 실시간 유지.
 async function fetchHtml(url: string, cacheSecs?: number): Promise<string> {
-  const init: RequestInit = { headers: { "User-Agent": UA } };
+  const init: RequestInit = { headers: baseHeaders() };
   if (cacheSecs) (init as { next?: { revalidate: number } }).next = { revalidate: cacheSecs };
   const res = await fetch(url, init);
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
@@ -39,7 +57,7 @@ async function postForm(path: string, form: Record<string, string | string[]>): 
   }
   const res = await fetch(`${BASE}${path}`, {
     method: "POST",
-    headers: { "User-Agent": UA, "Content-Type": "application/x-www-form-urlencoded" },
+    headers: baseHeaders({ "Content-Type": "application/x-www-form-urlencoded" }),
     body: body.toString(),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${path}`);
@@ -224,10 +242,12 @@ type NovelpiaSearchItem = {
   novel_age?: number;
 };
 
-/** 제목 키워드로 노벨피아 작품 검색 (성인작품 제외) */
+/** 제목 키워드로 노벨피아 작품 검색.
+ *  로그인 쿠키가 없으면 성인작품은 열람 불가라 결과에서 제외한다. */
 export async function searchNovels(keyword: string, limit = 20): Promise<SearchHit[]> {
   const kw = keyword.trim();
   if (!kw) return [];
+  const authed = hasNovelpiaAuth();
   const params = new URLSearchParams({
     cmd: "novel_search",
     page: "1",
@@ -235,14 +255,14 @@ export async function searchNovels(keyword: string, limit = 20): Promise<SearchH
     search_type: "all",
     search_val: kw,
     sort_col: "last_viewdate",
-    block_out: "0",
+    block_out: authed ? "" : "0", // 로그인 시 성인작품 포함
     block_stop: "0",
     is_contest: "0",
     is_challenge: "0",
     list_display: "list",
   });
   const res = await fetch(`${BASE}/proc/novel?${params}`, {
-    headers: { "User-Agent": UA, Accept: "application/json" },
+    headers: baseHeaders({ Accept: "application/json" }),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status} for novelpia search`);
   const json = (await res.json()) as { list?: NovelpiaSearchItem[] };
@@ -250,7 +270,7 @@ export async function searchNovels(keyword: string, limit = 20): Promise<SearchH
   return (json.list ?? [])
     .filter(
       (n): n is NovelpiaSearchItem & { novel_no: number; novel_name: string } =>
-        Boolean(n.novel_no && n.novel_name) && !n.novel_age // 성인작품은 분석 불가라 제외
+        Boolean(n.novel_no && n.novel_name) && (authed || !n.novel_age) // 비로그인 시 성인작품 제외
     )
     .map((n) => ({
       novelId: n.novel_no,
