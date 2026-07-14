@@ -1,5 +1,66 @@
 // 베스트 랭킹 데이터 분석 (마케팅 콘텐츠/인사이트용)
-import type { RankItem, NovelStats } from "./munpia";
+import type { RankItem, NovelStats, Episode } from "./munpia";
+
+// ---------- 연참 리듬(업로드 주기) 분석 ----------
+
+export type Cadence = {
+  totalEpisodes: number;
+  avgGapDays: number | null; // 평균 연참 간격(일)
+  perWeek: number | null; // 주당 평균 연재 수
+  recent30: number; // 최근 30일 연재 수
+  daysSinceLast: number | null; // 마지막 연재 후 경과일
+  lastDate: string | null;
+  regularity: "규칙적" | "다소 불규칙" | "불규칙" | null; // 간격 변동성 기준
+  onHiatus: boolean; // 휴재 의심(평균 간격의 3배 & 7일 초과)
+  note: string;
+};
+
+/** 회차 날짜로 연재 리듬 분석. 작가가 가장 신경 쓰는 '연참 규칙성'을 수치화. */
+export function computeCadence(eps: Episode[], now: Date = new Date()): Cadence | null {
+  const dates = eps
+    .map((e) => e.date)
+    .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d))
+    .map((d) => new Date(d + "T00:00:00+09:00").getTime())
+    .filter((t) => !isNaN(t))
+    .sort((a, b) => a - b);
+  if (dates.length < 2) return null;
+
+  const DAY = 86_400_000;
+  const gaps: number[] = [];
+  for (let i = 1; i < dates.length; i++) gaps.push((dates[i] - dates[i - 1]) / DAY);
+  const avgGap = gaps.reduce((s, g) => s + g, 0) / gaps.length;
+
+  const lastMs = dates[dates.length - 1];
+  const daysSinceLast = Math.max(0, Math.floor((now.getTime() - lastMs) / DAY));
+  const cutoff30 = now.getTime() - 30 * DAY;
+  const recent30 = dates.filter((t) => t >= cutoff30).length;
+
+  // 변동계수(표준편차/평균)로 규칙성 판정
+  const mean = avgGap || 1;
+  const variance = gaps.reduce((s, g) => s + (g - mean) ** 2, 0) / gaps.length;
+  const cv = Math.sqrt(variance) / mean;
+  const regularity: Cadence["regularity"] = cv < 0.4 ? "규칙적" : cv < 0.9 ? "다소 불규칙" : "불규칙";
+
+  const onHiatus = daysSinceLast > Math.max(avgGap * 3, 7);
+  const perWeek = avgGap > 0 ? Math.round((7 / avgGap) * 10) / 10 : null;
+
+  let note: string;
+  if (onHiatus) note = `마지막 연재 후 ${daysSinceLast}일 — 휴재로 보일 수 있어요. 독자 이탈 전에 공지나 연재 재개를 권합니다.`;
+  else if (regularity === "규칙적") note = `연참 간격이 일정합니다(평균 ${avgGap.toFixed(1)}일). 독자가 다음 화를 기다리기 좋은 리듬이에요.`;
+  else note = `연참 간격이 들쭉날쭉해요(평균 ${avgGap.toFixed(1)}일). 일정한 요일·주기를 잡으면 연독률이 안정됩니다.`;
+
+  return {
+    totalEpisodes: eps.length,
+    avgGapDays: Math.round(avgGap * 10) / 10,
+    perWeek,
+    recent30,
+    daysSinceLast,
+    lastDate: eps.filter((e) => /^\d{4}-\d{2}-\d{2}$/.test(e.date)).slice(-1)[0]?.date ?? null,
+    regularity,
+    onHiatus,
+    note,
+  };
+}
 
 // 웹소설 제목 후킹 클리셰 사전
 export const HOOKS: { label: string; re: RegExp }[] = [

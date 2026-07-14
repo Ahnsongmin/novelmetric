@@ -44,9 +44,21 @@ type Benchmark = {
   recommendsRatio: number | null;
   todayBestRank: number | null;
 };
+type Cadence = {
+  totalEpisodes: number;
+  avgGapDays: number | null;
+  perWeek: number | null;
+  recent30: number;
+  daysSinceLast: number | null;
+  lastDate: string | null;
+  regularity: "규칙적" | "다소 불규칙" | "불규칙" | null;
+  onHiatus: boolean;
+  note: string;
+};
 type Resp = {
   stats: Stats;
   retention: Retention | null;
+  cadence: Cadence | null;
   benchmark: Benchmark | null;
   history: Snapshot[];
   dbEnabled: boolean;
@@ -299,6 +311,12 @@ export default function DashboardPage() {
           {data.stats.platform !== "novelpia" && <SunjakBenchmark favorites={data.stats.favorites} />}
 
           {data.retention && <RetentionPanel r={data.retention} />}
+
+          <ConversionCard favorites={data.stats.favorites} firstViews={data.retention?.firstViews ?? null} />
+
+          {data.cadence && <CadencePanel c={data.cadence} />}
+
+          <TubePrediction favorites={data.stats.favorites} history={data.history} />
 
           <TrendChart history={data.history} />
 
@@ -641,6 +659,109 @@ function RetentionPanel({ r }: { r: Retention }) {
           <p className="mt-1.5 text-[11px] text-muted">이 회차의 전개·끊은 지점을 점검해 보세요.</p>
         </div>
       )}
+    </div>
+  );
+}
+
+function ConversionCard({ favorites, firstViews }: { favorites: number | null; firstViews: number | null }) {
+  if (!favorites || !firstViews) return null;
+  const rate = Math.round((favorites / firstViews) * 1000) / 10; // 1화 유입 대비 선작률(%)
+  // 웹소설 통념: 1화 조회 대비 선작 10%+면 우수, 5~10% 양호, 5%↓ 후킹 점검
+  const tone = rate >= 10 ? "good" : rate >= 5 ? "info" : "warn";
+  const color = tone === "good" ? "#34d399" : tone === "info" ? "#5b9bfd" : "#fbbf24";
+  const msg =
+    rate >= 10
+      ? "1화를 본 독자가 선작으로 잘 이어집니다. 후킹이 먹히고 있어요."
+      : rate >= 5
+        ? "선작 전환은 무난합니다. 1화 결말의 '다음 화 궁금증'을 더 세게 하면 올라가요."
+        : "1화는 봤는데 선작까지 안 갑니다. 1화 후반부 후킹·연참 예고를 점검하세요.";
+  return (
+    <div className="rounded-xl border border-border bg-card/40 p-4">
+      <div className="flex items-baseline justify-between">
+        <p className="text-sm font-bold">🎯 선작 전환율 (1화 조회 대비)</p>
+        <p className="text-2xl font-extrabold" style={{ color }}>
+          {rate}%
+        </p>
+      </div>
+      <p className="mt-1 text-xs text-muted">
+        1화 조회 {firstViews.toLocaleString("ko-KR")} 중 선작 {favorites.toLocaleString("ko-KR")} — {msg}
+      </p>
+    </div>
+  );
+}
+
+function CadencePanel({ c }: { c: Cadence }) {
+  const badge =
+    c.onHiatus
+      ? { t: "휴재 의심", cls: "bg-accent-2/20 text-accent-2" }
+      : c.regularity === "규칙적"
+        ? { t: "규칙적", cls: "bg-emerald-400/20 text-emerald-300" }
+        : { t: c.regularity ?? "-", cls: "bg-amber-400/20 text-amber-300" };
+  return (
+    <div className="rounded-xl border border-border bg-card/40 p-4">
+      <div className="flex items-baseline justify-between">
+        <p className="text-sm font-bold">🗓️ 연참 리듬 (업로드 주기)</p>
+        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${badge.cls}`}>{badge.t}</span>
+      </div>
+      <div className="mt-3 grid grid-cols-3 gap-3">
+        <Metric label="평균 연참 간격" value={c.avgGapDays} unit="일" />
+        <Metric label="주당 연재" value={c.perWeek} unit="화" />
+        <Metric label="최근 30일 연재" value={c.recent30} unit="화" />
+      </div>
+      <p className="mt-3 text-xs text-muted">
+        {c.lastDate && (
+          <>
+            마지막 연재 {c.lastDate}
+            {c.daysSinceLast != null && ` (${c.daysSinceLast}일 전)`} ·{" "}
+          </>
+        )}
+        {c.note}
+      </p>
+    </div>
+  );
+}
+
+function TubePrediction({ favorites, history }: { favorites: number | null; history: Snapshot[] }) {
+  if (favorites == null) return null;
+  if (favorites >= SUNJAK_BENCHMARK) return null; // 이미 달성 → 게이지에서 안내
+
+  // 추이 데이터로 하루 선작 증가 속도 추정 → 200까지 남은 일수
+  const pts = history.filter((h): h is Snapshot & { favorites: number } => h.favorites != null);
+  const remain = SUNJAK_BENCHMARK - favorites;
+  let body: React.ReactNode;
+  if (pts.length >= 2) {
+    const first = pts[0];
+    const last = pts[pts.length - 1];
+    const days = Math.max(
+      1,
+      (new Date(last.collected_at).getTime() - new Date(first.collected_at).getTime()) / 86_400_000,
+    );
+    const perDay = (last.favorites - first.favorites) / days;
+    if (perDay > 0.5) {
+      const eta = Math.ceil(remain / perDay);
+      body = (
+        <>
+          최근 하루 <b className="text-foreground">+{Math.round(perDay)}</b> 선작 속도면, 투베 적기(선작 200)까지{" "}
+          <b className="text-accent">약 {eta}일</b> 남았어요.
+        </>
+      );
+    } else {
+      body = <>최근 선작 증가가 거의 없어요. 유입(제목·홍보)을 늘려야 투베 진입 속도가 붙습니다.</>;
+    }
+  } else {
+    body = (
+      <>
+        투베 <b className="text-foreground">예상 도달일</b>은 추적 데이터가 2일 이상 쌓이면 계산돼요. 아래{" "}
+        <b className="text-accent">매일 추적</b>을 켜두면 자동으로 예측해 드릴게요.
+      </>
+    );
+  }
+  return (
+    <div className="rounded-xl border border-accent/40 bg-accent/10 p-4">
+      <p className="text-sm">
+        <b>🚀 투베 도달 예상 </b>
+        {body}
+      </p>
     </div>
   );
 }

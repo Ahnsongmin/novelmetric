@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchBest, computeRetention, type Episode, type RankItem } from "@/lib/munpia";
 import { parseQuery, platformOf, fetchNovelAny, fetchEpisodesAny } from "@/lib/platform";
-import { computeBenchmark } from "@/lib/analyze";
+import { computeBenchmark, computeCadence } from "@/lib/analyze";
 import { getSnapshots, saveSnapshot, trackNovel, dbEnabled } from "@/lib/db";
 import { passEnabled, passValidUntil, trackedCountByEmail, FREE_TRACK_LIMIT } from "@/lib/pass";
 
@@ -29,8 +29,9 @@ export async function GET(req: NextRequest) {
       isMunpia ? fetchBest("today").catch(() => [] as RankItem[]) : Promise.resolve([] as RankItem[]),
     ]);
     const retention = eps.length ? computeRetention(eps) : null;
+    const cadence = eps.length ? computeCadence(eps) : null;
     const benchmark = isMunpia ? computeBenchmark(stats, best) : null;
-    return NextResponse.json({ stats, retention, benchmark, history, dbEnabled: dbEnabled() });
+    return NextResponse.json({ stats, retention, cadence, benchmark, history, dbEnabled: dbEnabled() });
   } catch (e) {
     console.error("[api/novel]", e);
     return NextResponse.json(
