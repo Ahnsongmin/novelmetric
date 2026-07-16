@@ -482,7 +482,7 @@ function Comparison() {
     ["투베 진입 게이지(선작)", true, false],
     ["경쟁작(장르 베스트) 비교", true, false],
     ["제목 클릭률 AI 진단", true, false],
-    ["급변 알림(이메일/카톡)", true, false],
+    ["급변 알림(이메일)", true, false],
     ["설치 불필요(웹)", true, false],
   ] as const;
   return (

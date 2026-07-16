@@ -489,10 +489,11 @@ function TrackBox({
       </div>
     );
   }
-  const opts: { key: "none" | "email" | "kakao"; label: string }[] = [
+  // 카카오 알림톡은 발송 인프라(사전 승인 템플릿)가 아직 없어 선택지에서 제외 — 준비되면 복구
+  const opts: { key: "none" | "email" | "kakao"; label: string; disabled?: boolean }[] = [
     { key: "none", label: "알림 안 받음" },
     { key: "email", label: "📧 이메일" },
-    { key: "kakao", label: "💬 카카오톡" },
+    { key: "kakao", label: "💬 카카오톡 (준비 중)", disabled: true },
   ];
   return (
     <div className="rounded-xl border border-border bg-card/40 p-4">
@@ -504,11 +505,14 @@ function TrackBox({
         {opts.map((o) => (
           <button
             key={o.key}
-            onClick={() => setChannel(o.key)}
+            onClick={() => !o.disabled && setChannel(o.key)}
+            disabled={o.disabled}
             className={`rounded-full border px-3 py-1.5 text-sm transition ${
-              channel === o.key
-                ? "border-accent bg-accent/15 text-foreground"
-                : "border-border text-muted hover:text-foreground"
+              o.disabled
+                ? "cursor-not-allowed border-border text-muted opacity-50"
+                : channel === o.key
+                  ? "border-accent bg-accent/15 text-foreground"
+                  : "border-border text-muted hover:text-foreground"
             }`}
           >
             {o.label}
