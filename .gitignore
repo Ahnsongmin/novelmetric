@@ -33,6 +33,10 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# 개인정보 — 대기자 이메일 명단·발송 본문은 커밋 금지
+/scripts/waitlist-recipients.txt
+/scripts/waitlist-message.txt
+
 # vercel
 .vercel
 

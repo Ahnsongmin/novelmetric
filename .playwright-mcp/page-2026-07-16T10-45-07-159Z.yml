@@ -1,0 +1,53 @@
+- generic [ref=f3e1]:
+  - generic [ref=f3e3]:
+    - generic [ref=f3e4]:
+      - generic [ref=f3e6]:
+        - generic [ref=f3e7]: 로드 중
+        - progressbar [ref=f3e8]
+      - main [ref=f3e96]:
+        - generic [ref=f3e97]:
+          - generic [ref=f3e99]:
+            - generic [ref=f3e100]: Google 계정으로 로그인
+            - img "Vercel" [ref=f3e108]
+          - generic [ref=f3e109]:
+            - heading "안송민" [level=1] [ref=f3e110]
+            - generic [ref=f3e111]: songminan90@gmail.com
+        - generic [ref=f3e120]:
+          - generic [ref=f3e126]:
+            - generic [ref=f3e134]:
+              - textbox "비밀번호 입력" [active] [invalid] [ref=f3e135]
+              - generic: 비밀번호 입력
+            - generic [ref=f3e172]: 잘못된 비밀번호입니다. 다시 시도하거나 "다른 방법 시도"을 클릭하여 옵션을 더 확인하세요.
+            - generic [ref=f3e142]:
+              - checkbox "비밀번호 표시" [ref=f3e146] [cursor=pointer]
+              - generic [ref=f3e147]: 비밀번호 표시
+          - generic [ref=f3e152]:
+            - text: 앱을 사용하기 전에 Vercel의
+            - link "개인정보처리방침" [ref=f3e153] [cursor=pointer]:
+              - /url: https://vercel.com/legal/privacy-policy
+            - text: 및
+            - link "서비스 약관" [ref=f3e154] [cursor=pointer]:
+              - /url: https://vercel.com/legal/terms
+            - text: 을 검토하세요.
+        - generic [ref=f3e156]:
+          - button "다음" [ref=f3e160]
+          - button "다른 방법 시도" [ref=f3e167]
+    - contentinfo [ref=f3e76]:
+      - combobox "언어 변경 한국어" [ref=f3e80] [cursor=pointer]:
+        - generic: 한국어
+      - list [ref=f3e82]:
+        - listitem [ref=f3e83]:
+          - link "Google 계정 고객센터 열기(외부, 새 창에서 열림)" [ref=f3e84] [cursor=pointer]:
+            - /url: https://support.google.com/accounts?hl=ko&p=account_iph
+            - text: 도움말
+        - listitem [ref=f3e85]:
+          - link "개인정보처리방침(외부, 새 창에서 열림)" [ref=f3e86] [cursor=pointer]:
+            - /url: https://accounts.google.com/TOS?loc=KR&hl=ko&privacy=true
+            - text: 개인정보처리방침
+        - listitem [ref=f3e87]:
+          - link "Google 서비스 약관(외부, 새 창에서 열림)" [ref=f3e88] [cursor=pointer]:
+            - /url: https://accounts.google.com/TOS?loc=KR&hl=ko
+            - text: 약관
+  - iframe [ref=f3e89]:
+    
+  - generic [ref=f3e93]: 안송민

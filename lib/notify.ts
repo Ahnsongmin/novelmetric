@@ -16,10 +16,17 @@ export async function notify(
   return { sent: false, channel, reason: "channel_off" };
 }
 
-// ---------- 이메일 (Resend) ----------
-async function sendEmail(to: string, subject: string, body: string): Promise<NotifyResult> {
+// ---------- 이메일 (Resend → Gmail SMTP 폴백) ----------
+// RESEND_API_KEY가 있으면 Resend, 없으면 GMAIL_USER+GMAIL_APP_PASSWORD로 Gmail SMTP.
+// 도메인+Resend로 전환할 때는 env만 바꾸면 된다(코드 수정 없음).
+export async function sendEmail(to: string, subject: string, body: string): Promise<NotifyResult> {
+  if (process.env.RESEND_API_KEY) return sendViaResend(to, subject, body);
+  if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) return sendViaGmail(to, subject, body);
+  return { sent: false, channel: "email", reason: "no_email_provider_keys" };
+}
+
+async function sendViaResend(to: string, subject: string, body: string): Promise<NotifyResult> {
   const key = process.env.RESEND_API_KEY;
-  if (!key) return { sent: false, channel: "email", reason: "no_RESEND_API_KEY" };
   const from = process.env.RESEND_FROM || "노블메트릭 <onboarding@resend.dev>";
   try {
     const res = await fetch("https://api.resend.com/emails", {
@@ -28,6 +35,29 @@ async function sendEmail(to: string, subject: string, body: string): Promise<Not
       body: JSON.stringify({ from, to, subject, html: body.replace(/\n/g, "<br>") }),
     });
     if (!res.ok) return { sent: false, channel: "email", reason: `http_${res.status}` };
+    return { sent: true, channel: "email" };
+  } catch (e) {
+    return { sent: false, channel: "email", reason: String(e) };
+  }
+}
+
+async function sendViaGmail(to: string, subject: string, body: string): Promise<NotifyResult> {
+  try {
+    const { default: nodemailer } = await import("nodemailer");
+    const user = process.env.GMAIL_USER!;
+    const transporter = nodemailer.createTransport({
+      host: "smtp.gmail.com",
+      port: 465,
+      secure: true,
+      auth: { user, pass: process.env.GMAIL_APP_PASSWORD! },
+    });
+    await transporter.sendMail({
+      from: `노블메트릭 <${user}>`,
+      to,
+      subject,
+      text: body,
+      html: body.replace(/\n/g, "<br>"),
+    });
     return { sent: true, channel: "email" };
   } catch (e) {
     return { sent: false, channel: "email", reason: String(e) };

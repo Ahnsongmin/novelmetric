@@ -1,0 +1,54 @@
+- generic [ref=f21e2]:
+  - generic [ref=f21e3]:
+    - link "Skip to content" [ref=f21e4] [cursor=pointer]:
+      - /url: "#start-of-content"
+    - banner [ref=f21e6]
+  - main [ref=f21e9]:
+    - generic [ref=f21e10]:
+      - generic [ref=f21e12]:
+        - img "Supabase logo" [ref=f21e14]
+        - paragraph [ref=f21e15]:
+          - text: Sign in to
+          - strong [ref=f21e16]: GitHub
+          - text: to continue to
+          - strong [ref=f21e17]: Supabase
+      - generic [ref=f21e18]:
+        - generic [ref=f21e19]:
+          - generic [ref=f21e20]:
+            - generic [ref=f21e21]: Username or email address
+            - textbox "Username or email address" [active] [ref=f21e22]
+          - generic [ref=f21e23]:
+            - generic [ref=f21e24]: Password
+            - textbox "Password" [ref=f21e25]
+            - link "Forgot password?" [ref=f21e26] [cursor=pointer]:
+              - /url: /password_reset
+          - button "Sign in" [ref=f21e28] [cursor=pointer]
+        - generic [ref=f21e29]:
+          - generic [ref=f21e30]: or
+          - button "Continue with Google" [ref=f21e33] [cursor=pointer]
+          - button "Continue with Apple" [ref=f21e37] [cursor=pointer]
+      - generic [ref=f21e40]:
+        - paragraph [ref=f21e42]:
+          - text: New to GitHub?
+          - link "Create an account" [ref=f21e43] [cursor=pointer]:
+            - /url: /join?return_to=%2Flogin%2Foauth%2Fauthorize%3Fclient_id%3D60b7a7e2418b90251417%26redirect_to%3Dhttps%253A%252F%252Fsupabase.com%252Fdashboard%252Fsign-in-mfa%253FreturnTo%253D%25252Fproject%25252Fcnvezqmnxsmdrqhagmrq%25252Fsql%25252Fnew%2526method%253Dgithub%26redirect_uri%3Dhttps%253A%252F%252Falt.supabase.io%252Fauth%252Fv1%252Fcallback%26response_type%3Dcode%26scope%3Duser%253Aemail%26state%3D17ce4f64-b77e-4001-adac-2330d7be3d1f&source=oauth
+        - paragraph [ref=f21e45]:
+          - button "Sign in with a passkey" [ref=f21e46] [cursor=pointer]
+  - contentinfo [ref=f21e49]:
+    - list [ref=f21e50]:
+      - listitem [ref=f21e51]:
+        - link "Terms" [ref=f21e52] [cursor=pointer]:
+          - /url: https://docs.github.com/site-policy/github-terms/github-terms-of-service
+      - listitem [ref=f21e53]:
+        - link "Privacy" [ref=f21e54] [cursor=pointer]:
+          - /url: https://docs.github.com/site-policy/privacy-policies/github-privacy-statement
+      - listitem [ref=f21e55]:
+        - link "Docs" [ref=f21e56] [cursor=pointer]:
+          - /url: https://docs.github.com
+      - listitem [ref=f21e57]:
+        - link "Contact GitHub Support" [ref=f21e58] [cursor=pointer]:
+          - /url: https://support.github.com
+      - listitem [ref=f21e59]:
+        - button "Manage cookies" [ref=f21e61] [cursor=pointer]
+      - listitem [ref=f21e62]:
+        - button "Do not share my personal information" [ref=f21e64] [cursor=pointer]
