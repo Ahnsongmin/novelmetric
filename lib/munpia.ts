@@ -243,8 +243,8 @@ export type Retention = {
   firstViews: number | null;
   latestViews: number | null;
   cumulativeRate: number | null; // 누적 연독률 = 최신화/1화 ×100
-  adjustedRate: number | null; // 보정 연독률 = (최신-3화)/3화 ×100  (작가들이 쓰는 기준)
-  grade: string; // 매우 좋음 / 좋음 / 보통 / 주의
+  adjustedRate: number | null; // 보정 연독률 = (최신-3화)/4화 ×100 (커뮤니티 통용 기준)
+  grade: string; // 매우 좋음 / 좋음 / 보통 / 주의 / 위험
   dropoffs: Dropoff[]; // 회차별 급락(이탈 의심) 구간
 };
 
@@ -273,20 +273,24 @@ export async function fetchEpisodes(novelId: number, maxPages = 12): Promise<Epi
   return eps;
 }
 
-/** 회차별 조회수로 연독률 계산 */
+/** 회차별 조회수로 연독률 계산
+ *  계산 방식은 작가 커뮤니티(웹연갤 필독글 등)에서 통용되는 기준을 따른다:
+ *  - 분모 = 4화 조회수 (1~3화는 '구경 유입'이 빠져나가는 구간이라 제외)
+ *  - 분자 = 최신 3화를 제외한 마지막 회차 (갓 올라온 회차는 조회수가 덜 쌓여 왜곡)
+ *  회차가 8화 미만이면 보정 계산이 불가 → 누적(최신/1화)만 제공 */
 export function computeRetention(eps: Episode[]): Retention {
   const valid = eps.filter((e): e is Episode & { views: number } => e.views !== null);
   const first = valid[0]?.views ?? null;
   const latest = valid.length ? valid[valid.length - 1].views : null;
   const cumulative = first && latest ? Math.round((latest / first) * 100) : null;
 
-  // 보정: 3화 기준, 최신-3화 대비 (앞 2화·최신 3화 변동 제외)
-  const e3 = valid[2]?.views ?? null;
-  const eLatestMinus3 = valid.length >= 4 ? valid[valid.length - 4].views : null;
-  const adjusted = e3 && eLatestMinus3 ? Math.round((eLatestMinus3 / e3) * 100) : null;
+  const e4 = valid[3]?.views ?? null;
+  const eLatestMinus3 = valid.length >= 8 ? valid[valid.length - 4].views : null;
+  const adjusted = e4 && eLatestMinus3 ? Math.round((eLatestMinus3 / e4) * 100) : null;
 
   const r = adjusted ?? cumulative ?? 0;
-  const grade = r >= 70 ? "매우 좋음" : r >= 60 ? "좋음" : r >= 45 ? "보통" : "주의";
+  // 해석 구간도 커뮤니티 통용 눈금(80 상위권 / 60 무난 / 50 방어 / 40 미만 위기)에 맞춘다
+  const grade = r >= 80 ? "매우 좋음" : r >= 60 ? "좋음" : r >= 50 ? "보통" : r >= 40 ? "주의" : "위험";
 
   // 회차별 급락(이탈 의심): 4화 이후 ~ 최신-3화, 직전 회차 대비 15%+ 하락
   const dropoffs: Dropoff[] = [];

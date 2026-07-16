@@ -27,18 +27,20 @@ export default function GuidePage() {
           ‘건강 상태’를 볼 때 가장 먼저 보는 수치예요.
         </p>
         <p className="mt-2">
-          <b className="text-foreground">계산법:</b> 보통 앞 2~3화(유입 변동)와 최신 3화(아직 다 안 봄)를 빼고,
-          <code className="mx-1 rounded bg-card px-1.5 py-0.5">(최신화-3) ÷ 3화 조회수 × 100</code>으로 구합니다.
+          <b className="text-foreground">계산법(작가 커뮤니티 통용 방식):</b> 앞 1~3화는 ‘구경 유입’이 빠져나가는
+          구간이라 빼고, 갓 올라온 최신 3화도(아직 조회수가 덜 쌓여서) 뺀 뒤,
+          <code className="mx-1 rounded bg-card px-1.5 py-0.5">(최신화-3) ÷ 4화 조회수 × 100</code>으로 구합니다.
         </p>
         <p className="mt-2">
-          <b className="text-foreground">기준:</b> 60~70% 이상이면 양호, 그 이상이면 아주 좋은 편입니다. 떨어진다면
-          어느 회차에서 독자가 이탈했는지(꺾이는 지점)를 보는 게 핵심이에요.
+          <b className="text-foreground">해석 눈금(커뮤니티 통용, 비공식):</b> 80% 이상이면 상위권, 60%대면 무난,
+          50%대는 방어선, 40% 미만이면 위기 신호로 봅니다. 떨어진다면 어느 회차에서 독자가 이탈했는지(꺾이는
+          지점)를 보는 게 핵심이에요.
         </p>
         <div className="mt-3 rounded-lg border border-border bg-card/40 p-3 text-foreground">
           <p className="text-xs font-bold text-accent">계산 예시</p>
           <p className="mt-1">
-            3화 조회수 <b>60,000</b>, 최신화-3 회차 조회수 <b>36,000</b>이라면 →{" "}
-            <code className="rounded bg-background px-1.5 py-0.5">36,000 ÷ 60,000 = 60%</code>. 양호한 편입니다.
+            4화 조회수 <b>60,000</b>, 최신화-3 회차 조회수 <b>36,000</b>이라면 →{" "}
+            <code className="rounded bg-background px-1.5 py-0.5">36,000 ÷ 60,000 = 60%</code>. 무난한 편입니다.
           </p>
           <p className="mt-1 text-muted">
             노블메트릭은 회차별 조회수를 자동으로 모아 이 값을 계산하고, 급락한 ‘이탈 회차’까지 짚어줍니다.

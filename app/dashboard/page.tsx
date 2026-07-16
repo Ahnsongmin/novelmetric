@@ -294,7 +294,10 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <CopySummary data={data} />
+          <div className="flex flex-wrap gap-2">
+            <CopySummary data={data} />
+            <CsvExport data={data} />
+          </div>
 
           <Prescription data={data} />
 
@@ -309,6 +312,8 @@ export default function DashboardPage() {
           {data.benchmark && <BenchmarkCard b={data.benchmark} />}
 
           {data.stats.platform !== "novelpia" && <SunjakBenchmark favorites={data.stats.favorites} />}
+
+          {data.stats.platform !== "novelpia" && <MilestoneCard favorites={data.stats.favorites} />}
 
           {data.retention && <RetentionPanel r={data.retention} />}
 
@@ -418,12 +423,12 @@ function Prescription({ data }: { data: Resp }) {
   let text: string;
   let tone: "good" | "warn" | "info" = "info";
 
-  if (ret !== null && ret < 45) {
+  if (ret !== null && ret < 50) {
     tone = "warn";
     text = hasDrop
       ? `연독률이 낮습니다(${ret}%). 이탈 구간(${data.retention!.dropoffs[0].no}화)의 전개·끊은 지점을 먼저 손보세요.`
       : `연독률이 낮습니다(${ret}%). 초반 회차 몰입도와 연참 주기를 점검해 보세요.`;
-  } else if (vr !== null && vr < 0.8 && ret !== null && ret >= 55) {
+  } else if (vr !== null && vr < 0.8 && ret !== null && ret >= 60) {
     tone = "info";
     text = `연독률(${ret}%)은 괜찮은데 유입이 약해요(베스트 평균의 ${Math.round(vr * 100)}%). 제목 클릭률부터 점검하세요 → 무료 진단.`;
   } else if (fav >= 150 && fav < SUNJAK_BENCHMARK) {
@@ -447,7 +452,7 @@ function Prescription({ data }: { data: Resp }) {
       <p className="text-sm">
         <b>💡 한 줄 처방 </b>
         {text}{" "}
-        {(vr !== null && vr < 0.8) || (ret !== null && ret < 45) ? (
+        {(vr !== null && vr < 0.8) || (ret !== null && ret < 50) ? (
           <a href="/#top" className="font-bold text-accent underline">
             무료 제목 진단 →
           </a>
@@ -589,17 +594,105 @@ function SunjakBenchmark({ favorites }: { favorites: number | null }) {
       </div>
       <p className="mt-1.5 text-xs text-muted">
         {reached
-          ? "✅ 선작 200 돌파 — 작가 통념상 투데이베스트를 노려볼 적기입니다."
-          : `투베 진입 적기(선작 200)까지 ${(SUNJAK_BENCHMARK - favorites).toLocaleString("ko-KR")} 남음.`}
+          ? "✅ 선작 200 돌파 — 작가 커뮤니티에서 투데이베스트를 노려볼 적기로 통하는 구간입니다."
+          : `투베 도전 적기(선작 200, 커뮤니티 통설)까지 ${(SUNJAK_BENCHMARK - favorites).toLocaleString("ko-KR")} 남음.`}
       </p>
     </div>
+  );
+}
+
+// 유료화·컨택 이정표 — 작가 커뮤니티·자료 사이트에서 통용되는 비공식 참고치.
+// 점수·판정·권고를 만들지 않는다: 통설 수치와 내 위치를 나란히 보여주는 것까지가 진실의 선.
+const MILESTONES = [
+  { label: "투베 도전 적기", threshold: 200, desc: "이 무렵부터 투데이베스트를 노려볼 만하다고 통용" },
+  { label: "나홀로 유료화 통용선", threshold: 1000, desc: "출판사 없이 유료 전환을 고려하는 구간으로 통용" },
+  { label: "유료화 신청 통과 통용선", threshold: 3000, desc: "문피아 유료화 신청이 승인되는 수준으로 통용" },
+];
+
+function MilestoneCard({ favorites }: { favorites: number | null }) {
+  if (favorites === null) return null;
+  return (
+    <div className="rounded-xl border border-border bg-card/40 p-4">
+      <p className="text-sm font-bold">💼 유료화·컨택 이정표 (커뮤니티 통설 대비 내 위치)</p>
+      <div className="mt-3 space-y-3">
+        {MILESTONES.map((m) => {
+          const pct = Math.min(Math.round((favorites / m.threshold) * 100), 100);
+          const reached = favorites >= m.threshold;
+          return (
+            <div key={m.label}>
+              <div className="flex items-baseline justify-between text-xs">
+                <p>
+                  <b className="text-foreground">{m.label}</b>{" "}
+                  <span className="text-muted">선작 {m.threshold.toLocaleString("ko-KR")}</span>
+                </p>
+                <p className={reached ? "font-bold text-emerald-300" : "text-muted"}>
+                  {reached ? "✅ 도달" : `${pct}%`}
+                </p>
+              </div>
+              <div className="mt-1 h-2 overflow-hidden rounded-full bg-background">
+                <div
+                  className={`h-full rounded-full ${reached ? "bg-emerald-400" : "bg-gradient-to-r from-accent to-accent-2"}`}
+                  style={{ width: `${Math.max(pct, 2)}%` }}
+                />
+              </div>
+              <p className="mt-0.5 text-[11px] text-muted">{m.desc}</p>
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-3 rounded-lg border border-border bg-background/40 p-2.5 text-[11px] text-muted">
+        ⚠️ 전부 <b className="text-foreground">공식 기준이 아닌</b> 작가 커뮤니티·자료 사이트(웹소설 연재 갤러리,
+        탄마 등)에서 통용되는 참고치입니다. 장르·시기·작품에 따라 크게 달라지며, 실제 유료화·계약 판단의 근거가
+        아니라 이정표 참고용으로만 봐주세요.
+      </p>
+    </div>
+  );
+}
+
+function CsvExport({ data }: { data: Resp }) {
+  const eps = data.retention?.episodes?.filter((e) => e.views !== null) ?? [];
+  if (eps.length === 0 && data.history.length === 0) return null;
+
+  function download() {
+    const base = eps[3]?.views ?? null; // 연독률 기준(4화)
+    const lines: string[] = [];
+    if (eps.length > 0) {
+      lines.push("회차,제목,연재일,조회수,연독률(4화 대비 %)");
+      for (const e of eps) {
+        const r = base && e.views ? Math.round((e.views / base) * 1000) / 10 : "";
+        lines.push(`${e.no},"${e.title.replace(/"/g, '""')}",${e.date},${e.views},${r}`);
+      }
+    }
+    if (data.history.length > 0) {
+      if (lines.length) lines.push("");
+      lines.push("추적일시,조회수,추천수,선호작수");
+      for (const h of data.history) {
+        lines.push(`${h.collected_at},${h.views ?? ""},${h.recommends ?? ""},${h.favorites ?? ""}`);
+      }
+    }
+    // BOM을 붙여야 엑셀이 한글을 안 깨뜨린다
+    const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `노블메트릭_${data.stats.title.replace(/[\\/:*?"<>|]/g, "_")}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  return (
+    <button
+      onClick={download}
+      className="self-start rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted transition hover:border-accent hover:text-foreground"
+    >
+      ⬇️ CSV 내보내기 (엑셀용)
+    </button>
   );
 }
 
 function RetentionPanel({ r }: { r: Retention }) {
   const rate = r.adjustedRate ?? r.cumulativeRate;
   const color =
-    rate === null ? "#8ca0bd" : rate >= 70 ? "#34d399" : rate >= 60 ? "#5b9bfd" : rate >= 45 ? "#fbbf24" : "#2dd4bf";
+    rate === null ? "#8ca0bd" : rate >= 80 ? "#34d399" : rate >= 60 ? "#5b9bfd" : rate >= 50 ? "#fbbf24" : "#f87171";
   const eps = r.episodes.filter((e): e is Episode & { views: number } => e.views !== null);
 
   // 회차별 조회수 라인
@@ -627,12 +720,23 @@ function RetentionPanel({ r }: { r: Retention }) {
         </div>
         <div className="flex-1 text-sm text-muted">
           <p>
-            <b className="text-foreground">연독률</b>은 작가들이 가장 중요하게 보는 지표예요. 3화 대비 최신화의
-            조회수 유지율(앞 2화·최신 3화 제외)입니다.
+            <b className="text-foreground">연독률</b>은 작가들이 가장 중요하게 보는 지표예요.{" "}
+            {r.adjustedRate != null ? (
+              <>
+                작가 커뮤니티 통용 방식대로 <b className="text-foreground">4화 조회수를 100%</b>로 놓고 최신화(갓
+                올라온 최신 3개 회차 제외)의 유지율을 계산했습니다.
+              </>
+            ) : (
+              <>아직 회차가 적어 보정 계산(4화 기준) 대신 1화 대비 누적 유지율을 표시합니다.</>
+            )}
           </p>
           <p className="mt-1">
-            기준: <span className="text-foreground">60~70%+ 양호</span> · 1화 {r.firstViews?.toLocaleString("ko-KR")} →
-            최신 {r.latestViews?.toLocaleString("ko-KR")} (누적 {r.cumulativeRate ?? "-"}%)
+            해석 눈금(커뮤니티 통용, 비공식): <span className="text-foreground">80%+ 상위권 · 60% 무난 · 50% 방어 ·
+            40% 미만 위기</span>
+          </p>
+          <p className="mt-1">
+            1화 {r.firstViews?.toLocaleString("ko-KR")} → 최신 {r.latestViews?.toLocaleString("ko-KR")} (누적{" "}
+            {r.cumulativeRate ?? "-"}%)
           </p>
         </div>
       </div>
@@ -666,25 +770,16 @@ function RetentionPanel({ r }: { r: Retention }) {
 function ConversionCard({ favorites, firstViews }: { favorites: number | null; firstViews: number | null }) {
   if (!favorites || !firstViews) return null;
   const rate = Math.round((favorites / firstViews) * 1000) / 10; // 1화 유입 대비 선작률(%)
-  // 웹소설 통념: 1화 조회 대비 선작 10%+면 우수, 5~10% 양호, 5%↓ 후킹 점검
-  const tone = rate >= 10 ? "good" : rate >= 5 ? "info" : "warn";
-  const color = tone === "good" ? "#34d399" : tone === "info" ? "#5b9bfd" : "#fbbf24";
-  const msg =
-    rate >= 10
-      ? "1화를 본 독자가 선작으로 잘 이어집니다. 후킹이 먹히고 있어요."
-      : rate >= 5
-        ? "선작 전환은 무난합니다. 1화 결말의 '다음 화 궁금증'을 더 세게 하면 올라가요."
-        : "1화는 봤는데 선작까지 안 갑니다. 1화 후반부 후킹·연참 예고를 점검하세요.";
   return (
     <div className="rounded-xl border border-border bg-card/40 p-4">
       <div className="flex items-baseline justify-between">
         <p className="text-sm font-bold">🎯 선작 전환율 (1화 조회 대비)</p>
-        <p className="text-2xl font-extrabold" style={{ color }}>
-          {rate}%
-        </p>
+        <p className="text-2xl font-extrabold text-accent">{rate}%</p>
       </div>
       <p className="mt-1 text-xs text-muted">
-        1화 조회 {firstViews.toLocaleString("ko-KR")} 중 선작 {favorites.toLocaleString("ko-KR")} — {msg}
+        1화 조회 {firstViews.toLocaleString("ko-KR")} 중 선작 {favorites.toLocaleString("ko-KR")}. 공인된 기준치가
+        있는 지표는 아니에요 — 제목·소개글·1화를 수정한 <b className="text-foreground">전후 비교용</b>으로 쓰면 가장
+        유용합니다. 수치가 오르면 후킹 개선이 먹힌 겁니다.
       </p>
     </div>
   );
@@ -741,8 +836,9 @@ function TubePrediction({ favorites, history }: { favorites: number | null; hist
       const eta = Math.ceil(remain / perDay);
       body = (
         <>
-          최근 하루 <b className="text-foreground">+{Math.round(perDay)}</b> 선작 속도면, 투베 적기(선작 200)까지{" "}
-          <b className="text-accent">약 {eta}일</b> 남았어요.
+          최근 하루 <b className="text-foreground">+{Math.round(perDay)}</b> 선작 속도가 유지된다면, 투베 도전
+          적기(선작 200, 커뮤니티 통설)까지 <b className="text-accent">약 {eta}일</b> — 최근 추세를 그대로 늘린 단순
+          추정이에요.
         </>
       );
     } else {
