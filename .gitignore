@@ -45,3 +45,7 @@ yarn-error.log*
 next-env.d.ts
 
 .vercel
+
+# 브라우저 세션 산출물
+/.playwright-mcp/
+/*-analytics.png
