@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchBest100WithViews, type RankItem } from "@/lib/munpia";
+import { fetchBest100WithViews, computeRetention, type RankItem } from "@/lib/munpia";
 import { fetchTop100 } from "@/lib/novelpia";
-import { fetchNovelAny } from "@/lib/platform";
+import { fetchNovelAny, fetchEpisodesAny, platformOf } from "@/lib/platform";
 import {
   listTrackedNovelIds,
   listNotifyPrefs,
+  listWeeklyTargets,
   getSnapshots,
   saveSnapshot,
   saveBestDaily,
@@ -12,6 +13,7 @@ import {
   dbEnabled,
 } from "@/lib/db";
 import { detectAlerts, digestText } from "@/lib/alerts";
+import { buildWeeklyReport } from "@/lib/weekly";
 import { notify } from "@/lib/notify";
 
 export const runtime = "nodejs";
@@ -81,12 +83,41 @@ export async function GET(req: NextRequest) {
     if (r.sent) notified++;
   }
 
+  // Pro 주간 성장 리포트 — 월요일(KST) 또는 ?weekly=1 수동 트리거
+  const kstDow = new Date(Date.now() + 9 * 3600_000).getUTCDay();
+  const weeklyForced = req.nextUrl.searchParams.get("weekly") === "1";
+  let weeklySent = 0;
+  if (kstDow === 1 || weeklyForced) {
+    const targets = await listWeeklyTargets();
+    for (const t of targets) {
+      try {
+        const snaps = await getSnapshots(t.novel_id, 10);
+        const stats = await fetchNovelAny(t.novel_id).catch(() => null);
+        if (!stats) continue;
+        const eps = await fetchEpisodesAny(t.novel_id).catch(() => []);
+        const report = buildWeeklyReport({
+          title: stats.title,
+          platform: platformOf(t.novel_id),
+          snaps,
+          retention: eps.length ? computeRetention(eps) : null,
+        });
+        if (!report) continue;
+        const r = await notify("email", t.contact, report.subject, report.body);
+        if (r.sent) weeklySent++;
+        await sleep(800);
+      } catch {
+        // 개별 실패는 다음 대상 계속
+      }
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     collected: ok,
     failed: errors.length,
     total: ids.length,
     notified,
+    weeklySent,
     bestSaved,
   });
 }

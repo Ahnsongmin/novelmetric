@@ -24,8 +24,14 @@ function storedPass(): string | null {
   }
 }
 
-const FREE_FEATURES = ["제목 진단 월 3회", "작품 추적 1개", "베스트 분석 열람"];
-const PRO_FEATURES = ["제목 진단 무제한", "작품 추적 무제한", "연독률·추이 분석 전부", "지표 급변 알림(이메일)"];
+const FREE_FEATURES = ["제목 진단 월 3회", "작품 추적 1개", "연독률·이탈 분석 · CSV", "베스트 분석 열람"];
+const PRO_FEATURES = [
+  "제목 진단 무제한",
+  "작품 추적 무제한",
+  "심화 추이 분석 — 일별 증감표·성장 속도·이정표 예상",
+  "주간 성장 리포트 이메일 (매주 월요일)",
+  "지표 급변 알림(이메일)",
+];
 
 function ProContent() {
   const sp = useSearchParams();

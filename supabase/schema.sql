@@ -79,3 +79,7 @@ create table if not exists public.nm_pass (
   created_at timestamptz not null default now()
 );
 alter table public.nm_pass enable row level security;
+
+-- Phase 3: Pro 주간 리포트 — 추적↔패스 연결 -----------------------------------
+-- Pro 패스로 추적 등록하면 코드를 함께 저장 → 주간 성장 리포트 이메일 대상 판별.
+alter table public.tracked_novels add column if not exists pass_code text;

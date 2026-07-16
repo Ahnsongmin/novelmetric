@@ -70,10 +70,10 @@ export async function getSnapshots(novelId: number, limit = 90): Promise<Snapsho
   return ((data as Snapshot[]) ?? []).reverse();
 }
 
-export type TrackOptions = { email?: string; channel?: string; contact?: string };
+export type TrackOptions = { email?: string; channel?: string; contact?: string; passCode?: string };
 
-/** 작품 추적 등록 (+ 알림 채널/연락처).
- *  알림 컬럼이 아직 없는 DB에서도 추적은 되도록 폴백한다. */
+/** 작품 추적 등록 (+ 알림 채널/연락처, Pro면 패스 코드 연결).
+ *  알림·pass_code 컬럼이 아직 없는 DB에서도 추적은 되도록 폴백한다. */
 export async function trackNovel(novelId: number, opts: TrackOptions = {}): Promise<void> {
   const db = getDb();
   if (!db) return;
@@ -84,11 +84,12 @@ export async function trackNovel(novelId: number, opts: TrackOptions = {}): Prom
       email,
       notify_channel: opts.channel ?? "none",
       contact: opts.contact ?? opts.email ?? null,
+      ...(opts.passCode ? { pass_code: opts.passCode } : {}),
     },
     { onConflict: "novel_id,email" }
   );
   if (error) {
-    // notify_channel/contact 컬럼이 없는 구버전 스키마 → 기본 필드만 저장
+    // notify_channel/contact/pass_code 컬럼이 없는 구버전 스키마 → 기본 필드만 저장
     await db.from("tracked_novels").upsert({ novel_id: novelId, email }, { onConflict: "novel_id,email" });
   }
 }
@@ -151,4 +152,31 @@ export async function listNotifyPrefs(): Promise<TrackedPref[]> {
     .select("novel_id,notify_channel,contact")
     .neq("notify_channel", "none");
   return (data as TrackedPref[]) ?? [];
+}
+
+export type WeeklyTarget = { novel_id: number; contact: string; pass_code: string };
+
+/** Pro 주간 리포트 대상: 이메일 연락처 + 유효한 패스가 연결된 추적들.
+ *  pass_code 컬럼이 없는 구버전 스키마면 빈 배열(리포트 미발송)로 폴백. */
+export async function listWeeklyTargets(): Promise<WeeklyTarget[]> {
+  const db = getDb();
+  if (!db) return [];
+  const { data, error } = await db
+    .from("tracked_novels")
+    .select("novel_id,contact,pass_code")
+    .eq("notify_channel", "email")
+    .not("pass_code", "is", null)
+    .not("contact", "is", null);
+  if (error || !data) return [];
+  const rows = data as WeeklyTarget[];
+  if (!rows.length) return [];
+  // 유효(미만료) 패스만
+  const codes = [...new Set(rows.map((r) => r.pass_code))];
+  const { data: passes } = await db
+    .from("nm_pass")
+    .select("code,expires_at")
+    .in("code", codes)
+    .gt("expires_at", new Date().toISOString());
+  const valid = new Set(((passes as { code: string }[]) ?? []).map((p) => p.code));
+  return rows.filter((r) => valid.has(r.pass_code));
 }

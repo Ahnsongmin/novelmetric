@@ -95,9 +95,23 @@ export default function DashboardPage() {
   const [hits, setHits] = useState<SearchHit[] | null>(null);
   const [recents, setRecents] = useState<{ id: number; title: string }[]>([]);
 
+  const [isPro, setIsPro] = useState(false);
+
   useEffect(() => {
     try {
       setRecents(JSON.parse(localStorage.getItem("nm_recents") || "[]"));
+    } catch {
+      /* ignore */
+    }
+    // Pro 패스 유효 여부 (게이트 꺼짐 = 전부 무료 = Pro 취급)
+    try {
+      const code = (JSON.parse(localStorage.getItem("nm_pass") ?? "null") as { code?: string } | null)?.code;
+      fetch(`/api/gate${code ? `?code=${encodeURIComponent(code)}` : ""}`)
+        .then((r) => r.json())
+        .then((g: { enabled: boolean; passValidUntil: string | null }) =>
+          setIsPro(!g.enabled || Boolean(g.passValidUntil)),
+        )
+        .catch(() => {});
     } catch {
       /* ignore */
     }
@@ -324,6 +338,13 @@ export default function DashboardPage() {
           <TubePrediction favorites={data.stats.favorites} history={data.history} />
 
           <TrendChart history={data.history} />
+
+          <ProTrendPanel
+            history={data.history}
+            platform={data.stats.platform}
+            favorites={data.stats.favorites}
+            isPro={isPro}
+          />
 
           <TrackBox
             tracked={tracked}
@@ -862,6 +883,121 @@ function TubePrediction({ favorites, history }: { favorites: number | null; hist
         <b>🚀 투베 도달 예상 </b>
         {body}
       </p>
+    </div>
+  );
+}
+
+// Pro 심화 추이 — 일별 증감·성장 속도·이정표 예상 (전부 실측 스냅샷 기반, 추정은 가정 명시)
+function ProTrendPanel({
+  history,
+  platform,
+  favorites,
+  isPro,
+}: {
+  history: Snapshot[];
+  platform?: "munpia" | "novelpia";
+  favorites: number | null;
+  isPro: boolean;
+}) {
+  const pts = history.filter((h) => h.collected_at);
+  if (pts.length < 3) return null; // 증감 표는 3일 이상 쌓여야 의미가 있다
+
+  if (!isPro) {
+    return (
+      <div className="rounded-xl border border-accent/40 bg-card/40 p-4">
+        <div className="flex items-baseline justify-between">
+          <p className="text-sm font-bold">🔬 심화 추이 분석</p>
+          <span className="rounded-full bg-accent/20 px-2.5 py-1 text-xs font-bold text-accent">Pro</span>
+        </div>
+        <p className="mt-2 text-sm text-muted">
+          추적 데이터 {pts.length}일치가 쌓여 있어요. Pro 패스를 적용하면 <b className="text-foreground">일별
+          증감표 · 하루 평균 성장 속도 · 이정표 도달 예상</b>을 볼 수 있고, 매주 월요일{" "}
+          <b className="text-foreground">주간 성장 리포트 이메일</b>도 받아요.
+        </p>
+        <a
+          href="/pro"
+          className="mt-3 inline-block rounded-lg bg-gradient-to-r from-accent to-accent-2 px-4 py-2 text-sm font-bold text-background transition hover:opacity-90"
+        >
+          Pro 패스 보기 →
+        </a>
+      </div>
+    );
+  }
+
+  // 일별 증감 (최근 14구간)
+  const rows: { date: string; dViews: number | null; dFav: number | null; dRec: number | null }[] = [];
+  for (let i = Math.max(1, pts.length - 14); i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i];
+    rows.push({
+      date: b.collected_at.slice(5, 10),
+      dViews: a.views != null && b.views != null ? b.views - a.views : null,
+      dFav: a.favorites != null && b.favorites != null ? b.favorites - a.favorites : null,
+      dRec: a.recommends != null && b.recommends != null ? b.recommends - a.recommends : null,
+    });
+  }
+
+  // 최근 7일 하루 평균 속도
+  const last = pts[pts.length - 1];
+  const weekAgoMs = new Date(last.collected_at).getTime() - 7 * 86_400_000;
+  const weekPts = pts.filter((p) => new Date(p.collected_at).getTime() >= weekAgoMs);
+  const first = weekPts[0] ?? pts[0];
+  const spanDays = Math.max(
+    1,
+    (new Date(last.collected_at).getTime() - new Date(first.collected_at).getTime()) / 86_400_000,
+  );
+  const favPerDay =
+    first.favorites != null && last.favorites != null ? (last.favorites - first.favorites) / spanDays : null;
+  const viewsPerDay = first.views != null && last.views != null ? (last.views - first.views) / spanDays : null;
+
+  // 다음 이정표 예상 (문피아 선작 통설 기준)
+  let eta: { label: string; threshold: number; days: number } | null = null;
+  if (platform !== "novelpia" && favorites != null && favPerDay != null && favPerDay > 0.5) {
+    const next = MILESTONES.find((m) => favorites < m.threshold);
+    if (next) eta = { label: next.label, threshold: next.threshold, days: Math.ceil((next.threshold - favorites) / favPerDay) };
+  }
+
+  const d = (n: number | null) =>
+    n == null ? "-" : n >= 0 ? `+${n.toLocaleString("ko-KR")}` : n.toLocaleString("ko-KR");
+
+  return (
+    <div className="rounded-xl border border-accent/40 bg-card/40 p-4">
+      <div className="flex items-baseline justify-between">
+        <p className="text-sm font-bold">🔬 심화 추이 분석</p>
+        <span className="rounded-full bg-accent/20 px-2.5 py-1 text-xs font-bold text-accent">Pro</span>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <Metric label="최근 7일 하루 평균 선작" value={favPerDay == null ? null : Math.round(favPerDay * 10) / 10} />
+        <Metric label="최근 7일 하루 평균 조회" value={viewsPerDay == null ? null : Math.round(viewsPerDay)} />
+      </div>
+      {eta && (
+        <p className="mt-3 rounded-lg border border-accent/30 bg-accent/10 p-3 text-xs">
+          🚩 <b>{eta.label}</b>(선작 {eta.threshold.toLocaleString("ko-KR")}, 커뮤니티 통설)까지 현재 속도 유지 시{" "}
+          <b className="text-accent">약 {eta.days}일</b> — 최근 추세를 그대로 늘린 단순 추정입니다.
+        </p>
+      )}
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-left text-muted">
+              <th className="py-1.5 pr-3 font-semibold">날짜</th>
+              <th className="py-1.5 pr-3 font-semibold">Δ조회</th>
+              <th className="py-1.5 pr-3 font-semibold">Δ선작</th>
+              <th className="py-1.5 font-semibold">Δ추천</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={i} className="border-t border-border/60">
+                <td className="py-1.5 pr-3 text-muted">{r.date}</td>
+                <td className="py-1.5 pr-3">{d(r.dViews)}</td>
+                <td className={`py-1.5 pr-3 ${(r.dFav ?? 0) < 0 ? "text-accent-2" : ""}`}>{d(r.dFav)}</td>
+                <td className="py-1.5">{d(r.dRec)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-2 text-[11px] text-muted">매일 자동 수집된 실측 스냅샷 간 증감입니다.</p>
     </div>
   );
 }

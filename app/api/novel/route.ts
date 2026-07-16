@@ -68,7 +68,9 @@ export async function POST(req: NextRequest) {
   try {
     const stats = await fetchNovelAny(novelId);
     await saveSnapshot(stats); // DB 없으면 no-op
-    await trackNovel(novelId, { channel, contact: body.contact });
+    // 유효한 패스면 추적에 연결 → 주간 성장 리포트(Pro) 대상이 된다
+    const validPass = (await passValidUntil(body.passCode)) ? body.passCode : undefined;
+    await trackNovel(novelId, { channel, contact: body.contact, passCode: validPass });
     return NextResponse.json({ ok: true, tracked: dbEnabled(), stats });
   } catch (e) {
     console.error("[api/novel POST]", e);
