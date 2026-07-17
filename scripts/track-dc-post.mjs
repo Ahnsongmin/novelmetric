@@ -12,40 +12,59 @@ const LIST_URL =
   "https://gall.dcinside.com/mgallery/board/lists/?id=tgijjdd&s_type=name&s_keyword=%EB%85%B8%EB%B8%94%EB%A9%94%ED%8A%B8%EB%A6%AD";
 const metricsPath = join(here, "dc-post-metrics.json");
 
-const res = await fetch(LIST_URL, {
-  headers: {
-    "User-Agent":
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
-    "Accept-Language": "ko-KR,ko;q=0.9",
-  },
-});
-if (!res.ok) {
-  console.error(JSON.stringify({ error: `HTTP ${res.status}` }));
-  process.exit(1);
-}
-const html = await res.text();
-
-// 글 행 추출: data-no="1294715" 를 포함한 <tr> 블록
-const rowMatch = html.match(
-  new RegExp(`<tr[^>]*data-no="${POST_NO}"[\\s\\S]*?</tr>`)
-);
-if (!rowMatch) {
-  console.error(JSON.stringify({ error: `글 ${POST_NO} 행을 찾지 못함 (삭제/차단 여부 확인 필요)` }));
-  process.exit(1);
-}
-const row = rowMatch[0];
-
-const num = (re) => {
-  const m = row.match(re);
-  return m ? Number(m[1].replace(/,/g, "")) : null;
+const UA = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+  "Accept-Language": "ko-KR,ko;q=0.9",
 };
-const views = num(/gall_count[^>]*>([\d,]+)</);
-const recos = num(/gall_recommend[^>]*>([\d,]+)</);
-const cmtM = row.match(/reply_num[^>]*>\[([\d,]+)\]/);
-const comments = cmtM ? Number(cmtM[1].replace(/,/g, "")) : 0;
+const VIEW_URL = `https://gall.dcinside.com/mgallery/board/view/?id=tgijjdd&no=${POST_NO}`;
+
+let views = null;
+let recos = null;
+let comments = null;
+
+// 1차: 목록 검색 페이지의 글 행에서 파싱
+const listRes = await fetch(LIST_URL, { headers: UA });
+if (listRes.ok) {
+  const html = await listRes.text();
+  const rowMatch = html.match(new RegExp(`<tr[^>]*data-no="${POST_NO}"[\\s\\S]*?</tr>`));
+  if (rowMatch) {
+    const row = rowMatch[0];
+    const num = (re) => {
+      const m = row.match(re);
+      return m ? Number(m[1].replace(/,/g, "")) : null;
+    };
+    views = num(/gall_count[^>]*>([\d,]+)</);
+    recos = num(/gall_recommend[^>]*>([\d,]+)</);
+    const cmtM = row.match(/reply_num[^>]*>\[([\d,]+)\]/);
+    comments = cmtM ? Number(cmtM[1].replace(/,/g, "")) : 0;
+  }
+}
+
+// 2차 폴백: 글 본문 페이지에서 직접 파싱 (목록 검색이 간헐적으로 비어 나올 때 대비)
+if (views === null) {
+  const viewRes = await fetch(VIEW_URL, { headers: UA });
+  if (!viewRes.ok) {
+    console.error(JSON.stringify({ error: `본문 페이지 HTTP ${viewRes.status} — 삭제/차단 여부 브라우저로 확인 필요` }));
+    process.exit(1);
+  }
+  const html = await viewRes.text();
+  const num = (re) => {
+    const m = html.match(re);
+    return m ? Number(m[1].replace(/,/g, "")) : null;
+  };
+  // 본문 페이지 헤더: <span class="gall_count">조회 N</span> <span class="gall_reply_num">추천 N</span> <span class="gall_comment"><a>댓글 N</a></span>
+  views = num(/class="gall_count">조회\s*([\d,]+)/);
+  recos = num(/class="gall_reply_num">추천\s*([\d,]+)/);
+  comments = num(/class="gall_comment"><a[^>]*>댓글\s*([\d,]+)/) ?? 0;
+  if (views === null) {
+    console.error(JSON.stringify({ error: `본문 페이지에서도 수치를 찾지 못함 — 삭제/차단 여부 브라우저로 확인 필요` }));
+    process.exit(1);
+  }
+}
 
 const history = existsSync(metricsPath)
-  ? JSON.parse(readFileSync(metricsPath, "utf8"))
+  ? JSON.parse(readFileSync(metricsPath, "utf8").replace(/^﻿/, ""))
   : [];
 const prev = history.length ? history[history.length - 1] : null;
 const entry = { at: new Date().toISOString(), views, recos, comments };
