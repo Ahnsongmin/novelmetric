@@ -49,3 +49,5 @@ next-env.d.ts
 # 브라우저 세션 산출물
 /.playwright-mcp/
 /*-analytics.png
+
+scripts/.manager-reply-state.json

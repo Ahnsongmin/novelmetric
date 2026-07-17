@@ -141,11 +141,13 @@ export function analyzeBest(items: RankItem[]): BestAnalysis {
 export type GenreBenchmark = {
   genre: string;
   sampleSize: number;
-  avgViews: number;
-  avgRecommends: number;
+  avgViews: number; // 투베 표본 누적 총조회수 평균
+  avgRecommends: number; // 투베 표본 누적 추천수 평균
+  avgViewsPerEp: number | null; // 투베 표본 화당 평균 조회 (누적조회÷연재화수)
   myViews: number | null;
   myRecommends: number | null;
-  viewsRatio: number | null; // 내 조회수 / 베스트 평균
+  myViewsPerEp: number | null;
+  viewsRatio: number | null; // 내 누적 조회수 / 투베 누적 평균
   recommendsRatio: number | null;
   todayBestRank: number | null; // 오늘 베스트에 있으면 순위
 };
@@ -159,14 +161,22 @@ export function computeBenchmark(stats: NovelStats, best: RankItem[]): GenreBenc
     arr.length ? Math.round(arr.reduce((s, x) => s + x, 0) / arr.length) : 0;
   const avgViews = avg(pool.map((b) => b.views ?? 0).filter((v) => v > 0));
   const avgRec = avg(pool.map((b) => b.recommends ?? 0).filter((v) => v > 0));
+  const perEp = pool
+    .filter((b) => (b.views ?? 0) > 0 && (b.episodes ?? 0) > 0)
+    .map((b) => (b.views as number) / (b.episodes as number));
+  const avgViewsPerEp = perEp.length ? avg(perEp) : null;
+  const myViewsPerEp =
+    stats.views && stats.episodes ? Math.round(stats.views / stats.episodes) : null;
   const rank = best.find((b) => b.novelId === stats.novelId)?.rank ?? null;
   return {
     genre: myGenre || stats.genre,
     sampleSize: pool.length,
     avgViews,
     avgRecommends: avgRec,
+    avgViewsPerEp,
     myViews: stats.views,
     myRecommends: stats.recommends,
+    myViewsPerEp,
     viewsRatio: avgViews && stats.views ? Math.round((stats.views / avgViews) * 100) / 100 : null,
     recommendsRatio:
       avgRec && stats.recommends ? Math.round((stats.recommends / avgRec) * 100) / 100 : null,

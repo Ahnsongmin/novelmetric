@@ -38,8 +38,10 @@ type Benchmark = {
   sampleSize: number;
   avgViews: number;
   avgRecommends: number;
+  avgViewsPerEp: number | null;
   myViews: number | null;
   myRecommends: number | null;
+  myViewsPerEp: number | null;
   viewsRatio: number | null;
   recommendsRatio: number | null;
   todayBestRank: number | null;
@@ -451,7 +453,7 @@ function Prescription({ data }: { data: Resp }) {
       : `연독률이 낮습니다(${ret}%). 초반 회차 몰입도와 연참 주기를 점검해 보세요.`;
   } else if (vr !== null && vr < 0.8 && ret !== null && ret >= 60) {
     tone = "info";
-    text = `연독률(${ret}%)은 괜찮은데 유입이 약해요(베스트 평균의 ${Math.round(vr * 100)}%). 제목 클릭률부터 점검하세요 → 무료 진단.`;
+    text = `연독률(${ret}%)은 괜찮은데 유입이 약해요(투베 누적 평균의 ${Math.round(vr * 100)}%). 제목 클릭률부터 점검하세요 → 무료 진단.`;
   } else if (fav >= 150 && fav < SUNJAK_BENCHMARK) {
     tone = "good";
     text = `선작 ${fav.toLocaleString("ko-KR")} — 투베 적기(200)에 근접! 지금이 홍보·연참 집중 타이밍입니다.`;
@@ -581,20 +583,29 @@ function BenchmarkCard({ b }: { b: Benchmark }) {
       </div>
       <div className="mt-3 grid grid-cols-2 gap-3">
         <div className="rounded-lg border border-border bg-background/40 p-3">
-          <p className="text-xs text-muted">조회수</p>
+          <p className="text-xs text-muted">누적 조회수</p>
           <p className="mt-0.5 text-lg font-extrabold" style={{ color: ratioColor(b.viewsRatio) }}>
             {ratioText(b.viewsRatio)}
           </p>
-          <p className="text-[11px] text-muted">베스트 평균 {b.avgViews.toLocaleString("ko-KR")}</p>
+          <p className="text-[11px] text-muted">
+            투베 평균(누적) {b.avgViews.toLocaleString("ko-KR")}
+            {b.avgViewsPerEp !== null && ` · 화당 ~${b.avgViewsPerEp.toLocaleString("ko-KR")}`}
+          </p>
+          {b.myViewsPerEp !== null && (
+            <p className="text-[11px] text-muted">내 화당 평균 {b.myViewsPerEp.toLocaleString("ko-KR")}</p>
+          )}
         </div>
         <div className="rounded-lg border border-border bg-background/40 p-3">
-          <p className="text-xs text-muted">추천수</p>
+          <p className="text-xs text-muted">누적 추천수</p>
           <p className="mt-0.5 text-lg font-extrabold" style={{ color: ratioColor(b.recommendsRatio) }}>
             {ratioText(b.recommendsRatio)}
           </p>
-          <p className="text-[11px] text-muted">베스트 평균 {b.avgRecommends.toLocaleString("ko-KR")}</p>
+          <p className="text-[11px] text-muted">투베 평균(누적) {b.avgRecommends.toLocaleString("ko-KR")}</p>
         </div>
       </div>
+      <p className="mt-2 text-[11px] text-muted">
+        * 투베 상위 {b.sampleSize}작의 <b>작품 누적 총조회수</b> 기준입니다 (화당 조회수 아님). 화당 평균 = 누적조회 ÷ 연재화수.
+      </p>
     </div>
   );
 }
