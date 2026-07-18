@@ -357,6 +357,7 @@ export default function DashboardPage() {
             setContact={setContact}
             onTrack={track}
             dbEnabled={data.dbEnabled}
+            novelId={data.stats.novelId}
           />
         </div>
       )}
@@ -494,6 +495,7 @@ function TrackBox({
   setContact,
   onTrack,
   dbEnabled,
+  novelId,
 }: {
   tracked: boolean;
   tracking: boolean;
@@ -503,12 +505,19 @@ function TrackBox({
   setContact: (s: string) => void;
   onTrack: () => void;
   dbEnabled: boolean;
+  novelId: number;
 }) {
   if (tracked) {
     return (
       <div className="rounded-xl border border-emerald-400/40 bg-emerald-400/10 p-4 text-sm">
-        ✅ 추적 등록 완료! 매일 자동 수집되고, 연독률·선작이 급변하면{" "}
-        {channel === "email" ? "이메일로" : channel === "kakao" ? "카카오톡으로" : "(알림 미설정)"} 알려드릴게요.
+        <p>
+          ✅ 추적 등록 완료! 매일 자동 수집되고, 선작 이정표 돌파·급증 같은 변화가 있으면{" "}
+          {channel === "email" ? "이메일로 알려드릴게요." : "대시보드에서 확인할 수 있어요."}
+        </p>
+        <p className="mt-1.5 text-xs text-muted">
+          📅 다음 수집은 매일 새벽 3시 — 내일 이 작품을 다시 검색하면 첫 변화 추이가 보입니다.
+        </p>
+        {channel !== "email" && <EmailNudge novelId={novelId} />}
       </div>
     );
   }
@@ -522,7 +531,8 @@ function TrackBox({
     <div className="rounded-xl border border-border bg-card/40 p-4">
       <p className="text-sm font-bold">📈 이 작품 매일 추적 + 변화 알림</p>
       <p className="mt-0.5 text-xs text-muted">
-        연독률·선작·조회수를 매일 자동 수집하고, 급변(투베 적기·선작 급증 등) 시 알려드립니다. 알림 방식을 고르세요.
+        연독률·선작·조회수를 매일 자동 수집하고, 변화가 있는 날(선작 50·100·200 돌파, 급증·급감)에만 알려드립니다.
+        알림 방식을 고르세요.
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         {opts.map((o) => (
@@ -542,13 +552,15 @@ function TrackBox({
           </button>
         ))}
       </div>
-      {channel !== "none" && (
+      {channel !== "none" ? (
         <input
           value={contact}
           onChange={(e) => setContact(e.target.value)}
           placeholder={channel === "email" ? "이메일 주소" : "휴대폰 번호 (010...)"}
           className="mt-3 w-full rounded-lg border border-border bg-background/60 px-3 py-2.5 text-sm outline-none transition focus:border-accent"
         />
+      ) : (
+        <p className="mt-2 text-xs text-muted">* 이메일을 남기면 변화가 있는 날에만 알려드려요. 스팸·광고는 없습니다.</p>
       )}
       <button
         onClick={onTrack}
@@ -560,6 +572,56 @@ function TrackBox({
       {!dbEnabled && (
         <p className="mt-2 text-xs text-muted">* 추이·알림은 DB 연결 시 작동합니다.</p>
       )}
+    </div>
+  );
+}
+
+// 알림 없이 추적 등록한 유저에게 이메일을 부드럽게 권유 — 등록 시 같은 작품에 이메일 알림을 추가
+function EmailNudge({ novelId }: { novelId: number }) {
+  const [email, setEmail] = useState("");
+  const [state, setState] = useState<"idle" | "saving" | "done" | "error">("idle");
+  if (state === "done") {
+    return <p className="mt-2 text-xs text-emerald-300">📧 이메일 알림이 등록되었어요. 변화가 있는 날에만 보내드립니다.</p>;
+  }
+  async function save() {
+    if (!email.trim()) return;
+    setState("saving");
+    try {
+      let passCode: string | undefined;
+      try {
+        passCode = (JSON.parse(localStorage.getItem("nm_pass") ?? "null") as { code?: string } | null)?.code;
+      } catch {}
+      const res = await fetch("/api/novel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ q: String(novelId), channel: "email", contact: email.trim(), passCode }),
+      });
+      setState(res.ok ? "done" : "error");
+    } catch {
+      setState("error");
+    }
+  }
+  return (
+    <div className="mt-2.5 border-t border-emerald-400/20 pt-2.5">
+      <p className="text-xs text-muted">
+        이메일을 남기면 매일 접속하지 않아도 선작 이정표 돌파·급증 같은 변화가 있는 날 알려드려요. (스팸·광고 없음)
+      </p>
+      <div className="mt-2 flex gap-2">
+        <input
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="이메일 주소 (선택)"
+          className="min-w-0 flex-1 rounded-lg border border-border bg-background/60 px-3 py-2 text-sm outline-none transition focus:border-accent"
+        />
+        <button
+          onClick={save}
+          disabled={state === "saving" || !email.trim()}
+          className="shrink-0 rounded-lg border border-emerald-400/40 px-3 py-2 text-sm font-bold text-emerald-300 transition hover:bg-emerald-400/10 disabled:opacity-50"
+        >
+          {state === "saving" ? "등록 중…" : "알림 받기"}
+        </button>
+      </div>
+      {state === "error" && <p className="mt-1.5 text-xs text-amber-300">등록에 실패했어요. 잠시 후 다시 시도해 주세요.</p>}
     </div>
   );
 }
