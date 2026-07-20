@@ -15,6 +15,7 @@ import {
 import { detectAlerts, digestText } from "@/lib/alerts";
 import { buildWeeklyReport } from "@/lib/weekly";
 import { notify } from "@/lib/notify";
+import { scoreCuriosity } from "@/lib/curiosity";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -40,6 +41,8 @@ export async function GET(req: NextRequest) {
       fetchBest100WithViews().catch(() => [] as RankItem[]),
       fetchTop100().catch(() => [] as RankItem[]),
     ]);
+    // 제목 궁금증 지수 채점(플랫폼별 1회 호출). 실패해도 수집은 계속 — 점수만 비워진다.
+    await Promise.all([attachCuriosity(munpia), attachCuriosity(novelpia)]);
     await saveBestDaily(kstToday(), { munpia, novelpia });
     bestSaved = munpia.length > 0 || novelpia.length > 0;
   } catch {
@@ -124,4 +127,17 @@ export async function GET(req: NextRequest) {
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+/** items[].questionScore 를 제자리 채움. 실패 시 조용히 넘어가 수집을 막지 않는다. */
+async function attachCuriosity(items: RankItem[]): Promise<void> {
+  if (!items.length) return;
+  try {
+    const { scores } = await scoreCuriosity(items.map((it) => it.title));
+    items.forEach((it, i) => {
+      it.questionScore = typeof scores[i] === "number" ? scores[i] : null;
+    });
+  } catch (e) {
+    console.error("[cron] 궁금증 채점 실패:", e);
+  }
 }

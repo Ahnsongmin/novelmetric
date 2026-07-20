@@ -81,6 +81,15 @@ export type BestAnalysis = {
   avgViewsWithHook: number;
   avgViewsNoHook: number;
   topKeywords: { word: string; count: number }[];
+  // 제목 궁금증(호기심 갭) 지수 분석 — questionScore가 채점된 데이터에서만 채워진다(옛 데이터는 null)
+  curiosity: CuriosityAnalysis | null;
+};
+
+export type CuriosityAnalysis = {
+  scored: number; // 궁금증 점수가 매겨진 작품 수
+  avgViewsHigh: number; // 궁금증 상위 그룹 평균 조회수
+  avgViewsLow: number; // 궁금증 하위 그룹 평균 조회수
+  quantile: number; // 상·하위를 가른 분위 비율(예: 0.25 = 상/하위 25%)
 };
 
 const STOPWORDS = new Set([
@@ -133,7 +142,27 @@ export function analyzeBest(items: RankItem[]): BestAnalysis {
     avgViewsWithHook: avg(withHook),
     avgViewsNoHook: avg(noHook),
     topKeywords,
+    curiosity: analyzeCuriosity(items),
   };
+}
+
+/** 제목 궁금증 지수 상위 그룹 vs 하위 그룹의 평균 조회수 비교.
+ *  후킹 클리셰 유무(avgViewsWithHook/NoHook)와 별개로, '궁금증을 유발하는 제목'이
+ *  실제 조회수와 어떻게 붙는지 본다. questionScore·views가 둘 다 있는 작품만 대상. */
+function analyzeCuriosity(items: RankItem[]): CuriosityAnalysis | null {
+  const scored = items
+    .filter((it) => typeof it.questionScore === "number" && (it.views ?? 0) > 0)
+    .map((it) => ({ score: it.questionScore as number, views: it.views as number }))
+    .sort((a, b) => b.score - a.score);
+  if (scored.length < 8) return null; // 표본이 너무 적으면 분위 비교가 무의미
+
+  const quantile = 0.25;
+  const k = Math.max(1, Math.floor(scored.length * quantile));
+  const high = scored.slice(0, k);
+  const low = scored.slice(-k);
+  const avg = (arr: { views: number }[]) =>
+    arr.length ? Math.round(arr.reduce((s, x) => s + x.views, 0) / arr.length) : 0;
+  return { scored: scored.length, avgViewsHigh: avg(high), avgViewsLow: avg(low), quantile };
 }
 
 // ---------- 경쟁 벤치마크 (내 작품 vs 오늘 베스트) ----------

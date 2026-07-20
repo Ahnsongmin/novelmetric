@@ -21,6 +21,7 @@ export type RankItem = {
   synopsis: string;
   cover: string | null;
   favorites?: number | null; // 선호작수 (노벨피아 top100 제공)
+  questionScore?: number | null; // 제목 궁금증(호기심 갭) 지수 0~100 — 수집 시 1회 채점(lib/curiosity)
 };
 
 export type NovelStats = {
