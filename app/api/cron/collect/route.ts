@@ -23,9 +23,9 @@ export const maxDuration = 300;
 // 매일 1회: 추적 작품 지표 수집 → 스냅샷 적재 → 변화 감지 → 채널별 알림 발송
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
+  const isVercelCron = req.headers.get("x-vercel-cron") !== null;
   if (secret) {
     const auth = req.headers.get("authorization");
-    const isVercelCron = req.headers.get("x-vercel-cron") !== null;
     if (!isVercelCron && auth !== `Bearer ${secret}`) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
@@ -90,7 +90,8 @@ export async function GET(req: NextRequest) {
   const kstDow = new Date(Date.now() + 9 * 3600_000).getUTCDay();
   const weeklyForced = req.nextUrl.searchParams.get("weekly") === "1";
   let weeklySent = 0;
-  if (kstDow === 1 || weeklyForced) {
+  // 정기(Vercel cron) 월요일에만 자동 발송 — 수동/외부 트리거 재실행 시 중복 메일 방지
+  if ((kstDow === 1 && isVercelCron) || weeklyForced) {
     const targets = await listWeeklyTargets();
     for (const t of targets) {
       try {
@@ -129,11 +130,14 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/** items[].questionScore 를 제자리 채움. 실패 시 조용히 넘어가 수집을 막지 않는다. */
+/** items[].questionScore 를 제자리 채움. 실패 시 조용히 넘어가 수집을 막지 않는다.
+ *  휴리스틱 폴백 결과는 저장하지 않는다 — 페이지가 "AI 채점"으로 표기하므로
+ *  Claude 채점일 때만 기록하고, 아니면 점수 없이 저장돼 카드가 뜨지 않는다. */
 async function attachCuriosity(items: RankItem[]): Promise<void> {
   if (!items.length) return;
   try {
-    const { scores } = await scoreCuriosity(items.map((it) => it.title));
+    const { scores, engine } = await scoreCuriosity(items.map((it) => it.title));
+    if (engine !== "claude") return;
     items.forEach((it, i) => {
       it.questionScore = typeof scores[i] === "number" ? scores[i] : null;
     });
