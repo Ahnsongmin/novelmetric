@@ -92,7 +92,7 @@ export default function DashboardPage() {
   const [data, setData] = useState<Resp | null>(null);
   const [tracking, setTracking] = useState(false);
   const [tracked, setTracked] = useState(false);
-  const [channel, setChannel] = useState<"none" | "email" | "kakao">("none");
+  const [channel, setChannel] = useState<"none" | "email" | "kakao">("email");
   const [contact, setContact] = useState("");
   const [hits, setHits] = useState<SearchHit[] | null>(null);
   const [recents, setRecents] = useState<{ id: number; title: string }[]>([]);
@@ -523,16 +523,16 @@ function TrackBox({
   }
   // 카카오 알림톡은 발송 인프라(사전 승인 템플릿)가 아직 없어 선택지에서 제외 — 준비되면 복구
   const opts: { key: "none" | "email" | "kakao"; label: string; disabled?: boolean }[] = [
-    { key: "none", label: "알림 안 받음" },
     { key: "email", label: "📧 이메일" },
     { key: "kakao", label: "💬 카카오톡 (준비 중)", disabled: true },
+    { key: "none", label: "알림 안 받음" },
   ];
   return (
     <div className="rounded-xl border border-border bg-card/40 p-4">
       <p className="text-sm font-bold">📈 이 작품 매일 추적 + 변화 알림</p>
       <p className="mt-0.5 text-xs text-muted">
         연독률·선작·조회수를 매일 자동 수집하고, 변화가 있는 날(선작 50·100·200 돌파, 급증·급감)에만 알려드립니다.
-        알림 방식을 고르세요.
+        매일 접속하지 않아도 이메일로 받아보세요. (스팸·광고 없음)
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         {opts.map((o) => (

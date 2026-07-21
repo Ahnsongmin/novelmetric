@@ -343,13 +343,72 @@ function ResultView({ result, title }: { result: DiagnoseResult; title: string }
 
       <ShareButtons title={title} result={result} />
 
+      <ResultEmailCapture />
+
       <p className="pt-1 text-center text-[11px] text-muted">
-        {result.engine === "claude" ? "특화 AI 정밀 진단" : "샘플 진단(데모)"} · 더 깊은
-        분석은 출시 후 제공됩니다 →{" "}
-        <a href="#waitlist" className="text-accent underline">
-          알림 신청
-        </a>
+        {result.engine === "claude" ? "특화 AI 정밀 진단" : "샘플 진단(데모)"} · 더 깊은 분석은 출시 후 제공됩니다
       </p>
+    </div>
+  );
+}
+
+// 진단 결과(만족도 최고 순간)에 바로 붙는 이메일 캡처 — 매주 제목 트렌드 리포트.
+// waitlist 테이블에 source:"diagnose"로 저장해 어느 지점이 전환됐는지 구분한다.
+function ResultEmailCapture() {
+  const [email, setEmail] = useState("");
+  const [state, setState] = useState<"idle" | "saving" | "done" | "error">("idle");
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim()) return;
+    setState("saving");
+    try {
+      const res = await fetch("/api/waitlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), source: "diagnose" }),
+      });
+      setState(res.ok ? "done" : "error");
+    } catch {
+      setState("error");
+    }
+  }
+
+  if (state === "done") {
+    return (
+      <div className="rounded-xl border border-accent/50 bg-accent/10 p-4 text-center text-sm">
+        🎉 등록됐어요! 매주 문피아·노벨피아 제목 트렌드 리포트를 이메일로 보내드릴게요.
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-accent/40 bg-accent/5 p-4">
+      <p className="text-sm font-bold">📮 매주 &lsquo;잘 팔리는 제목&rsquo; 트렌드를 이메일로</p>
+      <p className="mt-0.5 text-xs text-muted">
+        문피아·노벨피아 베스트 제목 패턴을 매주 정리해 보내드려요. 초기 신청자는{" "}
+        <b className="text-foreground">Pro 무료 체험</b> 제공. (스팸·광고 없음)
+      </p>
+      <form onSubmit={submit} className="mt-3 flex flex-col gap-2 sm:flex-row">
+        <input
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="이메일 주소"
+          className="min-w-0 flex-1 rounded-lg border border-border bg-background/60 px-3 py-2.5 text-sm outline-none transition focus:border-accent"
+        />
+        <button
+          type="submit"
+          disabled={state === "saving" || !email.trim()}
+          className="shrink-0 rounded-lg bg-gradient-to-r from-accent to-accent-2 px-5 py-2.5 text-sm font-bold text-background transition hover:opacity-90 disabled:opacity-60"
+        >
+          {state === "saving" ? "등록 중…" : "무료로 받기"}
+        </button>
+      </form>
+      {state === "error" && (
+        <p className="mt-2 text-xs text-amber-300">등록에 실패했어요. 잠시 후 다시 시도해 주세요.</p>
+      )}
     </div>
   );
 }
