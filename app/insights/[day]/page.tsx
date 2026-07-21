@@ -101,27 +101,27 @@ function PlatformReport({
 
       {a.curiosity && (
         <section className="mt-5 rounded-2xl border border-border bg-card/60 p-5">
-          <h3 className="font-bold">🤔 제목 궁금증 지수</h3>
+          <h3 className="font-bold">🤔 제목 궁금증 지수 <span className="text-xs font-normal text-muted">(참고용)</span></h3>
           <p className="mt-1 text-xs text-muted">
             클리셰 키워드가 아니라, 제목이 &lsquo;왜? 뭐지?&rsquo; 하는 질문을 만드는 정도(AI 채점).
           </p>
           <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-            <div className="rounded-xl border border-accent/40 bg-accent/10 p-3">
+            <div className="rounded-xl border border-border p-3">
               <div className="text-xs text-muted">궁금증 상위 {Math.round(a.curiosity.quantile * 100)}%</div>
-              <div className="mt-1 text-lg font-extrabold text-accent">
-                {a.curiosity.avgViewsHigh.toLocaleString()}
-              </div>
+              <div className="mt-1 text-base font-bold">{a.curiosity.avgViewsHigh.toLocaleString()}</div>
               <div className="text-xs text-muted">평균 조회수</div>
             </div>
             <div className="rounded-xl border border-border p-3">
               <div className="text-xs text-muted">궁금증 하위 {Math.round(a.curiosity.quantile * 100)}%</div>
-              <div className="mt-1 text-lg font-extrabold">
-                {a.curiosity.avgViewsLow.toLocaleString()}
-              </div>
+              <div className="mt-1 text-base font-bold">{a.curiosity.avgViewsLow.toLocaleString()}</div>
               <div className="text-xs text-muted">평균 조회수</div>
             </div>
           </div>
-          <p className="mt-3 text-xs text-muted">{a.curiosity.scored}작 채점 기준.</p>
+          <p className="mt-3 text-xs text-muted">
+            조회수가 집계되는 상위권 {a.curiosity.scored}작 기준(상·하위 각{" "}
+            {Math.max(1, Math.floor(a.curiosity.scored * a.curiosity.quantile))}작)이라 표본이 작습니다.
+            순위 영향과 섞여 있어 인과가 아닌 참고용 관찰로 봐 주세요.
+          </p>
         </section>
       )}
 
