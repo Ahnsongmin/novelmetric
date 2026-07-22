@@ -51,3 +51,7 @@ next-env.d.ts
 /*-analytics.png
 
 scripts/.manager-reply-state.json
+
+# 대기자 발급 코드·매핑 (redeemable Pro 코드 — git 제외)
+scripts/waitlist-codes.json
+scripts/waitlist-codes.sql

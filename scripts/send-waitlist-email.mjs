@@ -31,12 +31,37 @@ const recipients = readFileSync(join(here, "waitlist-recipients.txt"), "utf8")
 
 const raw = readFileSync(join(here, "waitlist-message.txt"), "utf8").replace(/\r\n/g, "\n");
 const [subject, ...rest] = raw.split("\n");
-const body = rest.join("\n").replace(/^\n+/, "");
+const bodyTemplate = rest.join("\n").replace(/^\n+/, "");
 
-if (!subject.trim() || !body.trim()) {
+if (!subject.trim() || !bodyTemplate.trim()) {
   console.error("waitlist-message.txt가 비어 있습니다. 1번째 줄=제목, 나머지=본문으로 채워주세요.");
   process.exit(1);
 }
+
+// 개인별 Pro 체험 코드 매핑 (email → code). 본문에 {{CODE}}가 있으면 사람마다 치환.
+const codesPath = join(here, "waitlist-codes.json");
+const codeByEmail = new Map(
+  existsSync(codesPath)
+    ? JSON.parse(readFileSync(codesPath, "utf8")).map((r) => [r.email.toLowerCase(), r.code])
+    : [],
+);
+const needsCode = bodyTemplate.includes("{{CODE}}");
+
+// 본문에 코드 자리표시자가 있는데 코드가 없는 수신자가 있으면 발송 전 중단(빈 코드 메일 방지)
+if (needsCode) {
+  const missing = recipients.filter((to) => !codeByEmail.has(to.toLowerCase()));
+  if (missing.length) {
+    console.error(`본문에 {{CODE}}가 있으나 코드가 없는 수신자 ${missing.length}명:\n  ${missing.join("\n  ")}`);
+    console.error(`먼저 node scripts/gen-pass-codes.mjs 로 코드를 발급하세요.`);
+    process.exit(1);
+  }
+}
+
+const bodyFor = (to) =>
+  needsCode ? bodyTemplate.replaceAll("{{CODE}}", codeByEmail.get(to.toLowerCase())) : bodyTemplate;
+
+// 미리보기는 첫 수신자 기준(코드 치환된 실제 모습)
+const body = bodyFor(recipients[0] ?? "");
 
 console.log(`모드: ${live ? "🔴 LIVE 발송" : "dry_run (미발송 — --live로 실발송)"}`);
 console.log(`발신: 노블메트릭 <${user ?? "(GMAIL_USER 미설정)"}>`);
@@ -64,12 +89,13 @@ const transporter = nodemailer.createTransport({
 let sent = 0;
 for (const to of recipients) {
   try {
+    const personal = bodyFor(to);
     await transporter.sendMail({
       from: `노블메트릭 <${user}>`,
       to,
       subject,
-      text: body,
-      html: body.replace(/\n/g, "<br>"),
+      text: personal,
+      html: personal.replace(/\n/g, "<br>"),
     });
     sent++;
     console.log(`✅ ${to}`);
