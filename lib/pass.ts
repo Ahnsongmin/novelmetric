@@ -12,9 +12,12 @@ export const FREE_TRACK_LIMIT = 1;
 export const DIAG_COOKIE = "nm_diag";
 
 export function passEnabled(): boolean {
-  return Boolean(
-    process.env.TOSS_SECRET_KEY && process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY && dbEnabled(),
+  // 결제 수단이 하나라도 켜져 있으면(토스 또는 페이앱) 무료 제한·패스 게이트 활성.
+  const toss = Boolean(process.env.TOSS_SECRET_KEY && process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY);
+  const payapp = Boolean(
+    process.env.PAYAPP_USERID && process.env.PAYAPP_LINKKEY && process.env.PAYAPP_LINKVAL,
   );
+  return (toss || payapp) && dbEnabled();
 }
 
 // ── 무료 진단 쿼터: "YYYY-MM.사용횟수.서명" 쿠키 ───────────────────────────

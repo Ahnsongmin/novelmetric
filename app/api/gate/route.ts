@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { passEnabled, diagUsed, passValidUntil, PASS, FREE_DIAG_PER_MONTH } from "@/lib/pass";
+import { payappEnabled } from "@/lib/payapp";
 
 export const runtime = "nodejs";
 
@@ -13,6 +14,7 @@ export async function GET(req: NextRequest) {
     freeLeft: enabled ? Math.max(0, FREE_DIAG_PER_MONTH - diagUsed(req.headers.get("cookie"))) : null,
     passValidUntil: enabled && code ? await passValidUntil(code) : null,
     clientKey: process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY ?? null,
+    payapp: payappEnabled(),
     pass: PASS,
   });
 }

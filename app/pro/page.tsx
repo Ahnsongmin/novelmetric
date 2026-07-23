@@ -4,6 +4,7 @@
 // 결제 env가 없으면(준비 전) 대기 안내만 보여준다.
 
 import { Suspense, useEffect, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
 type Gate = {
@@ -11,6 +12,7 @@ type Gate = {
   freeLeft: number | null;
   passValidUntil: string | null;
   clientKey: string | null;
+  payapp: boolean;
   pass: { amount: number; days: number; name: string };
 };
 
@@ -43,6 +45,8 @@ function ProContent() {
   const [gate, setGate] = useState<Gate | null>(null);
   const [validUntil, setValidUntil] = useState<string | null>(null);
   const [codeInput, setCodeInput] = useState("");
+  const [phone, setPhone] = useState("");
+  const [buying, setBuying] = useState(false);
   const [error, setError] = useState(sp.get("pay") === "fail" ? "결제가 취소되거나 실패했어요." : "");
 
   useEffect(() => {
@@ -87,6 +91,25 @@ function ProContent() {
     }
   }
 
+  // 페이앱 결제 — 휴대폰 번호로 결제요청 생성 후 결제창(payurl)으로 이동
+  async function buyPayapp() {
+    setError("");
+    setBuying(true);
+    try {
+      const res = await fetch("/api/payapp/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || "결제요청 생성에 실패했어요.");
+      location.href = j.payurl;
+    } catch (e) {
+      setError((e as Error).message);
+      setBuying(false);
+    }
+  }
+
   async function applyCode() {
     const code = codeInput.trim().toUpperCase();
     if (!code) return;
@@ -102,7 +125,7 @@ function ProContent() {
 
   return (
     <main className="mx-auto max-w-3xl flex-1 px-5 py-12">
-      <a href="/" className="text-sm text-muted hover:text-foreground">← 노블메트릭</a>
+      <Link href="/" className="text-sm text-muted hover:text-foreground">← 노블메트릭</Link>
       <h1 className="mt-3 text-3xl font-bold">Pro 패스</h1>
       <p className="mt-2 text-muted">
         회원가입 없이, 결제하면 받는 <b className="text-foreground">코드 한 줄</b>로 30일 동안 모든 기능이 열립니다.
@@ -137,7 +160,27 @@ function ProContent() {
               <li key={f}>✓ {f}</li>
             ))}
           </ul>
-          {gate?.enabled ? (
+          {gate?.payapp ? (
+            <div className="mt-5">
+              <input
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                inputMode="numeric"
+                placeholder="휴대폰 번호 (결제 확인용, 01012345678)"
+                className="w-full rounded-lg border border-border bg-background/60 px-3 py-2.5 text-sm outline-none transition focus:border-accent"
+              />
+              <button
+                onClick={buyPayapp}
+                disabled={buying || phone.replace(/[^0-9]/g, "").length < 10}
+                className="mt-2 w-full rounded-lg bg-gradient-to-r from-accent to-accent-2 py-3 font-bold text-background transition hover:opacity-90 disabled:opacity-60"
+              >
+                {buying ? "결제창 여는 중…" : "카드·간편결제로 구매하기"}
+              </button>
+              <p className="mt-2 text-xs text-muted">
+                결제창에서 카드/간편결제 후, 코드가 자동 발급됩니다. 번호는 결제 확인 외에 쓰지 않아요.
+              </p>
+            </div>
+          ) : gate?.enabled && gate?.clientKey ? (
             <button
               onClick={buy}
               className="mt-5 w-full rounded-lg bg-gradient-to-r from-accent to-accent-2 py-3 font-bold text-background transition hover:opacity-90"
