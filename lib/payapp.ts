@@ -44,6 +44,8 @@ export async function createCheckout(opts: { phone: string; origin: string }): P
     price: String(PASS.amount),
     recvphone: opts.phone,
     smsuse: "n", // 문자 발송 없이 payurl로 바로 결제 (실패해도 페이앱 기본값으로 동작)
+    // 휴대전화(소액)결제 제외 — 계약 특칙(수납률 99% 미달 시 정산 차감) 리스크 차단.
+    openpaytype: "card,kakaopay,naverpay,tosspay,payco",
     feedbackurl: `${opts.origin}/api/payapp/feedback`,
     returnurl: `${opts.origin}/pro/payapp?order=${orderId}`,
     var1: orderId,
