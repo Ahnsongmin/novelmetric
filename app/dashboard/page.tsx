@@ -250,6 +250,11 @@ export default function DashboardPage() {
           {loading ? "…" : "검색 / 조회"}
         </button>
       </form>
+      <p className="mt-2 text-xs text-muted">
+        제목 검색: 문피아 · 노벨피아 · 카카오페이지 —{" "}
+        <b className="text-foreground">네이버시리즈는 제목 검색이 안 돼요.</b> 작품 페이지 URL
+        (series.naver.com/novel/detail.series?productNo=…)을 복사해 붙여넣어 주세요.
+      </p>
       {error && (
         <p role="alert" className="mt-3 text-sm text-accent-2">
           {error}
