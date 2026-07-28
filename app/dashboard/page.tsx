@@ -61,11 +61,18 @@ type Cadence = {
   onHiatus: boolean;
   note: string;
 };
+type GenreBench = {
+  sampleSize: number;
+  median: number;
+  rank: number;
+  scope: "genre" | "platform";
+};
 type Resp = {
   stats: Stats;
   retention: Retention | null;
   cadence: Cadence | null;
   benchmark: Benchmark | null;
+  genreBench: GenreBench | null;
   history: Snapshot[];
   dbEnabled: boolean;
 };
@@ -360,6 +367,16 @@ export default function DashboardPage() {
           {data.stats.platform !== "novelpia" && <MilestoneCard favorites={data.stats.favorites} />}
 
           {data.retention && <RetentionPanel r={data.retention} />}
+
+          {data.genreBench && data.retention?.adjustedRate != null && (
+            <GenreBenchCard
+              gb={data.genreBench}
+              myRate={data.retention.adjustedRate}
+              genre={data.stats.genre}
+              platform={data.stats.platform ?? "munpia"}
+              isPro={isPro}
+            />
+          )}
 
           {!data.retention &&
             (data.stats.platform === "naverseries" || data.stats.platform === "kakaopage") && (
@@ -1084,6 +1101,72 @@ function TubePrediction({ favorites, history }: { favorites: number | null; hist
 }
 
 // Pro 심화 추이 — 일별 증감·성장 속도·이정표 예상 (전부 실측 스냅샷 기반, 추정은 가정 명시)
+// 장르 벤치마크(Pro) — 상위권 스캔 풀의 연독률 분포 대비 내 위치
+function GenreBenchCard({
+  gb,
+  myRate,
+  genre,
+  platform,
+  isPro,
+}: {
+  gb: GenreBench;
+  myRate: number;
+  genre: string;
+  platform: keyof typeof PLATFORM_LABEL;
+  isPro: boolean;
+}) {
+  const scopeLabel =
+    gb.scope === "genre" ? `${PLATFORM_LABEL[platform]} ${genre} 상위권` : `${PLATFORM_LABEL[platform]} 상위권`;
+
+  if (!isPro) {
+    return (
+      <div className="rounded-xl border border-accent/40 bg-card/40 p-4">
+        <div className="flex items-baseline justify-between">
+          <p className="text-sm font-bold">📊 장르 벤치마크</p>
+          <span className="rounded-full bg-accent/20 px-2.5 py-1 text-xs font-bold text-accent">Pro</span>
+        </div>
+        <p className="mt-2 text-sm text-muted">
+          {scopeLabel} <b className="text-foreground">{gb.sampleSize}작품</b>의 연독률 분포가 준비돼 있어요. Pro
+          패스를 적용하면 <b className="text-foreground">내 연독률이 상위권 몇 위 수준인지</b> 바로 볼 수 있어요.
+        </p>
+        <a
+          href="/pro"
+          className="mt-3 inline-block rounded-lg bg-gradient-to-r from-accent to-accent-2 px-4 py-2 text-sm font-bold text-background transition hover:opacity-90"
+        >
+          Pro 패스 보기 →
+        </a>
+      </div>
+    );
+  }
+
+  const above = myRate >= gb.median;
+  return (
+    <div className="rounded-xl border border-border bg-card/60 p-4">
+      <p className="text-sm font-bold">📊 장르 벤치마크 — {scopeLabel}</p>
+      <div className="mt-3 grid grid-cols-3 gap-3 text-center">
+        <div>
+          <p className="text-xs text-muted">상위권 중앙값</p>
+          <p className="mt-1 text-xl font-bold">{gb.median}%</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted">내 연독률</p>
+          <p className={`mt-1 text-xl font-bold ${above ? "text-emerald-300" : "text-amber-300"}`}>{myRate}%</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted">내 위치</p>
+          <p className="mt-1 text-xl font-bold">
+            {gb.sampleSize}작품 중 {gb.rank}위
+          </p>
+        </div>
+      </div>
+      <p className="mt-3 text-xs text-muted">
+        최근 90일간 자동 스캔한 {scopeLabel} 작품의 보정 연독률 분포와 비교한 위치예요.
+        {above ? " 상위권 기준으로도 독자를 잘 붙잡고 있어요." : " 중앙값과의 차이는 이탈 구간 점검부터 시작해 보세요."}
+      </p>
+    </div>
+  );
+}
+
 function ProTrendPanel({
   history,
   platform,

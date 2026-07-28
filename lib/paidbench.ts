@@ -11,8 +11,9 @@ export type PaidTransitionRow = {
   platform: Platform;
   title: string;
   genre: string;
-  paidStartNo: number; // 유료 전환 첫 회차
+  paidStartNo: number | null; // 유료 전환 첫 회차 (null = 전환 없음 — 연독률 풀로만 쓰임)
   totalEps: number;
+  adjustedRate?: number | null; // 보정 연독률 — 장르 벤치마크 풀 (2026-07-28 이전 행에는 없음)
   freeRate: number | null; // 무료 구간 연독률
   paidPassRate: number | null; // 전환 통과율
   paidRate: number | null; // 유료 구간 연독률
@@ -49,7 +50,8 @@ export async function scanPaidTransitions(
       const eps = await fetchEpisodesAny(storageId);
       if (!eps.length) continue;
       const r = computeRetention(eps);
-      if (r.paidStartNo == null) continue; // 아직 무료 연재 → 전환작 아님
+      // 전환작이 아니어도 연독률이 나오면 저장 — 장르 벤치마크 풀이 된다
+      if (r.paidStartNo == null && r.adjustedRate == null) continue;
       rows.push({
         novelId: storageId,
         platform,
@@ -57,6 +59,7 @@ export async function scanPaidTransitions(
         genre: item.genre ?? "",
         paidStartNo: r.paidStartNo,
         totalEps: eps.length,
+        adjustedRate: r.adjustedRate,
         freeRate: r.freeRate,
         paidPassRate: r.paidPassRate,
         paidRate: r.paidRate,
@@ -85,22 +88,23 @@ function median(nums: number[]): number | null {
   return s.length % 2 ? s[mid] : Math.round((s[mid - 1] + s[mid]) / 2);
 }
 
-/** 여러 날의 paidBench 행을 작품별로 최신 1건만 남기고 분포 통계로 집계 */
+/** 여러 날의 paidBench 행을 작품별로 최신 1건만 남기고 분포 통계로 집계 (유료 전환작만) */
 export function aggregatePaidBench(rows: PaidTransitionRow[]): PaidBenchStats {
   const latest = new Map<number, PaidTransitionRow>();
   for (const r of rows) {
+    if (r.paidStartNo == null) continue; // 연독률 풀 전용 행 제외
     const prev = latest.get(r.novelId);
     if (!prev || r.scannedAt > prev.scannedAt) latest.set(r.novelId, r);
   }
   const list = [...latest.values()];
-  const starts = list.map((r) => r.paidStartNo);
+  const starts = list.map((r) => r.paidStartNo!);
   const passes = list.map((r) => r.paidPassRate).filter((v): v is number => v != null);
 
   const genreMap = new Map<string, number[]>();
   for (const r of list) {
     const g = r.genre || "기타";
     if (!genreMap.has(g)) genreMap.set(g, []);
-    genreMap.get(g)!.push(r.paidStartNo);
+    genreMap.get(g)!.push(r.paidStartNo!);
   }
   const byGenre = [...genreMap.entries()]
     .map(([genre, arr]) => ({ genre, count: arr.length, medianPaidStartNo: median(arr) }))

@@ -2,6 +2,7 @@
 // 원칙: 실측치만 쓰고, 추정은 "최근 속도 유지 가정" 명시. 근거 없는 판정·권고 없음.
 import type { Snapshot } from "./db";
 import type { Retention } from "./munpia";
+import type { RetentionBench, GrowthBench } from "./benchmark";
 
 const MILESTONES = [
   { label: "투베 도전 적기(통설)", threshold: 200 },
@@ -39,6 +40,8 @@ export function buildWeeklyReport(opts: {
   platform: string;
   snaps: Snapshot[];
   retention: Retention | null;
+  genreBench?: RetentionBench | null; // 상위권 연독률 분포 대비 내 위치
+  growthBench?: GrowthBench | null; // 상위권 주간 조회 증가 중앙값
 }): { subject: string; body: string } | null {
   const w = weekWindow(opts.snaps);
   if (!w) return null;
@@ -58,6 +61,21 @@ export function buildWeeklyReport(opts: {
 
   if (opts.retention?.adjustedRate != null) {
     lines.push(`📖 연독률  ${opts.retention.adjustedRate}% (커뮤니티 통용 방식: 4화 기준, 최신 3화 제외)`);
+  }
+
+  // 장르 벤치마크 — 상위권 스캔 풀 대비 내 위치 (풀이 얇으면 생략)
+  const scopeWord = (s: "genre" | "platform") => (s === "genre" ? "장르 상위권" : "플랫폼 상위권");
+  if (opts.genreBench && opts.retention?.adjustedRate != null) {
+    const g = opts.genreBench;
+    lines.push(
+      `📊 ${scopeWord(g.scope)} 연독률 중앙값 ${g.median}% — 내 작품 ${opts.retention.adjustedRate}% (${g.sampleSize}작품 중 ${g.rank}위 수준)`
+    );
+  }
+  if (opts.growthBench) {
+    const g = opts.growthBench;
+    lines.push(
+      `🏁 ${scopeWord(g.scope)} 최근 ${g.days}일 조회 증가 중앙값 ${delta(g.medianDelta)} — 내 작품 ${delta(dViews)}`
+    );
   }
 
   // 이정표 진행 — 문피아 선작 기준 통설 (비공식)

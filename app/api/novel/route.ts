@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { fetchBest, computeRetention, type Episode, type RankItem } from "@/lib/munpia";
 import { parseQuery, platformOf, fetchNovelAny, fetchEpisodesAny } from "@/lib/platform";
 import { computeBenchmark, computeCadence } from "@/lib/analyze";
-import { getSnapshots, saveSnapshot, trackNovel, dbEnabled } from "@/lib/db";
+import { retentionBenchmark } from "@/lib/benchmark";
+import { getSnapshots, saveSnapshot, trackNovel, dbEnabled, getRecentPaidBench } from "@/lib/db";
 import { passEnabled, passValidUntil, trackedCountByEmail, FREE_TRACK_LIMIT } from "@/lib/pass";
 
 export const runtime = "nodejs";
@@ -21,17 +22,23 @@ export async function GET(req: NextRequest) {
   }
   const isMunpia = platformOf(novelId) === "munpia";
   try {
-    const [stats, eps, history, best] = await Promise.all([
+    const [stats, eps, history, best, benchPool] = await Promise.all([
       fetchNovelAny(novelId),
       fetchEpisodesAny(novelId).catch(() => [] as Episode[]),
       getSnapshots(novelId),
       // 투베 벤치마크는 문피아 기준 — 노벨피아 작품엔 미적용
       isMunpia ? fetchBest("today").catch(() => [] as RankItem[]) : Promise.resolve([] as RankItem[]),
+      getRecentPaidBench().catch(() => []),
     ]);
     const retention = eps.length ? computeRetention(eps) : null;
     const cadence = eps.length ? computeCadence(eps) : null;
     const benchmark = isMunpia ? computeBenchmark(stats, best) : null;
-    return NextResponse.json({ stats, retention, cadence, benchmark, history, dbEnabled: dbEnabled() });
+    // 장르 벤치마크 — 상위권 스캔 풀 대비 내 연독률 위치 (풀이 아직 얇으면 null)
+    const genreBench =
+      retention?.adjustedRate != null
+        ? retentionBenchmark(benchPool, platformOf(novelId), stats.genre, retention.adjustedRate)
+        : null;
+    return NextResponse.json({ stats, retention, cadence, benchmark, genreBench, history, dbEnabled: dbEnabled() });
   } catch (e) {
     console.error("[api/novel]", e);
     return NextResponse.json(

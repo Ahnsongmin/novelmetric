@@ -11,9 +11,13 @@ import {
   getSnapshots,
   saveSnapshot,
   saveBestDaily,
+  getBestDaily,
+  getRecentPaidBench,
   kstToday,
   dbEnabled,
+  type BestDaily,
 } from "@/lib/db";
+import { retentionBenchmark, growthBenchmark } from "@/lib/benchmark";
 import { detectAlerts, detectFreshDropoffs, digestText } from "@/lib/alerts";
 import { buildWeeklyReport, buildCompareReport, type CompareWork } from "@/lib/weekly";
 import { notify } from "@/lib/notify";
@@ -40,6 +44,7 @@ export async function GET(req: NextRequest) {
   // 오늘 베스트 아카이브 (문피아·노벨피아·네이버시리즈·카카오페이지) — /insights 자동 콘텐츠의 원천
   let bestSaved = false;
   let benchScanned = 0;
+  let bestToday: BestDaily | null = null; // 주간 성장 벤치마크(7일 전 아카이브 대비)에 재사용
   try {
     const [munpia, novelpia, naverseries, kakaopage] = await Promise.all([
       fetchBest100WithViews().catch(() => [] as RankItem[]),
@@ -64,7 +69,8 @@ export async function GET(req: NextRequest) {
       dayIndex
     ).catch(() => []);
     benchScanned = paidBench.length;
-    await saveBestDaily(kstToday(), { munpia, novelpia, naverseries, kakaopage, paidBench });
+    bestToday = { munpia, novelpia, naverseries, kakaopage, paidBench };
+    await saveBestDaily(kstToday(), bestToday);
     bestSaved = [munpia, novelpia, naverseries, kakaopage].some((a) => a.length > 0);
   } catch {
     // 베스트 수집 실패해도 추적 수집은 계속
@@ -146,6 +152,12 @@ export async function GET(req: NextRequest) {
   // 정기(Vercel cron) 월요일에만 자동 발송 — 수동/외부 트리거 재실행 시 중복 메일 방지
   if ((kstDow === 1 && isVercelCron) || weeklyForced) {
     const targets = await listWeeklyTargets();
+    // 장르 벤치마크 재료 — 연독률 풀(최근 90일 스캔)과 7일 전 베스트 아카이브
+    const weekAgoDay = new Date(Date.now() + 9 * 3600_000 - 7 * 86_400_000).toISOString().slice(0, 10);
+    const [benchPool, bestWeekAgo] = await Promise.all([
+      getRecentPaidBench().catch(() => []),
+      getBestDaily(weekAgoDay).catch(() => null),
+    ]);
     // [Pro] 경쟁작 워치 — 같은 연락처가 추적하는 작품들을 모아 주간 비교표를 한 통으로
     const compareByContact = new Map<string, Map<number, CompareWork>>();
     for (const t of targets) {
@@ -155,18 +167,27 @@ export async function GET(req: NextRequest) {
         if (!stats) continue;
         const eps = await fetchEpisodesAny(t.novel_id).catch(() => []);
         const retention = eps.length ? computeRetention(eps) : null;
+        const platform = platformOf(t.novel_id);
         if (!compareByContact.has(t.contact)) compareByContact.set(t.contact, new Map());
         compareByContact.get(t.contact)!.set(t.novel_id, {
           title: stats.title,
-          platform: platformOf(t.novel_id),
+          platform,
           snaps,
           retention,
         });
         const report = buildWeeklyReport({
           title: stats.title,
-          platform: platformOf(t.novel_id),
+          platform,
           snaps,
           retention,
+          genreBench:
+            retention?.adjustedRate != null
+              ? retentionBenchmark(benchPool, platform, stats.genre, retention.adjustedRate)
+              : null,
+          growthBench:
+            bestToday && bestWeekAgo
+              ? growthBenchmark(bestWeekAgo[platform] ?? [], bestToday[platform] ?? [], stats.genre)
+              : null,
         });
         if (!report) continue;
         const r = await notify("email", t.contact, report.subject, report.body);
