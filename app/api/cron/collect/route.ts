@@ -14,10 +14,11 @@ import {
   kstToday,
   dbEnabled,
 } from "@/lib/db";
-import { detectAlerts, digestText } from "@/lib/alerts";
+import { detectAlerts, detectFreshDropoffs, digestText } from "@/lib/alerts";
 import { buildWeeklyReport } from "@/lib/weekly";
 import { notify } from "@/lib/notify";
 import { scoreCuriosity } from "@/lib/curiosity";
+import { scanPaidTransitions } from "@/lib/paidbench";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -38,6 +39,7 @@ export async function GET(req: NextRequest) {
 
   // 오늘 베스트 아카이브 (문피아·노벨피아·네이버시리즈·카카오페이지) — /insights 자동 콘텐츠의 원천
   let bestSaved = false;
+  let benchScanned = 0;
   try {
     const [munpia, novelpia, naverseries, kakaopage] = await Promise.all([
       fetchBest100WithViews().catch(() => [] as RankItem[]),
@@ -52,7 +54,17 @@ export async function GET(req: NextRequest) {
       attachCuriosity(naverseries),
       attachCuriosity(kakaopage),
     ]);
-    await saveBestDaily(kstToday(), { munpia, novelpia, naverseries, kakaopage });
+    // 유료 전환 벤치마크: 회차별 데이터가 있는 문피아·노벨피아 상위작을 매일 일부씩 순환 스캔
+    const dayIndex = Math.floor(Date.now() / 86_400_000);
+    const paidBench = await scanPaidTransitions(
+      [
+        { platform: "munpia", items: munpia },
+        { platform: "novelpia", items: novelpia },
+      ],
+      dayIndex
+    ).catch(() => []);
+    benchScanned = paidBench.length;
+    await saveBestDaily(kstToday(), { munpia, novelpia, naverseries, kakaopage, paidBench });
     bestSaved = [munpia, novelpia, naverseries, kakaopage].some((a) => a.length > 0);
   } catch {
     // 베스트 수집 실패해도 추적 수집은 계속
@@ -95,6 +107,37 @@ export async function GET(req: NextRequest) {
     if (r.sent) notified++;
   }
 
+  // [Pro 덤] 이탈 경보 — Pro 추적 작품은 매일 연독률을 다시 계산해,
+  // 갓 평가 가능해진 회차의 급락(이탈)을 다음날 아침 메일로 알린다
+  let dropoffAlerted = 0;
+  try {
+    const proTargets = await listWeeklyTargets();
+    const today = kstToday();
+    for (const t of proTargets) {
+      try {
+        const eps = await fetchEpisodesAny(t.novel_id).catch(() => []);
+        if (eps.length < 8) continue;
+        const r = computeRetention(eps);
+        const flags = detectFreshDropoffs(r, today);
+        if (!flags.length) continue;
+        const stats = await fetchNovelAny(t.novel_id).catch(() => null);
+        const title = stats?.title ?? `작품 ${t.novel_id}`;
+        const body = [
+          `[노블메트릭 Pro] "${title}" 이탈 경보`,
+          ...flags.map((f) => `· ${f.message}`),
+          `→ https://novelmetric.vercel.app/dashboard`,
+        ].join("\n");
+        const res = await notify("email", t.contact, `[노블메트릭] ${title} 이탈 경보`, body);
+        if (res.sent) dropoffAlerted++;
+        await sleep(800);
+      } catch {
+        // 개별 실패는 다음 대상 계속
+      }
+    }
+  } catch {
+    // 이탈 경보 실패해도 나머지 계속
+  }
+
   // Pro 주간 성장 리포트 — 월요일(KST) 또는 ?weekly=1 수동 트리거
   const kstDow = new Date(Date.now() + 9 * 3600_000).getUTCDay();
   const weeklyForced = req.nextUrl.searchParams.get("weekly") === "1";
@@ -132,6 +175,8 @@ export async function GET(req: NextRequest) {
     notified,
     weeklySent,
     bestSaved,
+    benchScanned,
+    dropoffAlerted,
   });
 }
 

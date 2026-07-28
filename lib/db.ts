@@ -111,17 +111,22 @@ export function kstToday(): string {
   return new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
 }
 
-/** 일일 베스트 — 플랫폼별 분리 저장. (2026-07-14 이전은 문피아 단독 배열, 07-28 이전은 문피아·노벨피아만) */
+import type { PaidTransitionRow } from "./paidbench";
+
+/** 일일 베스트 — 플랫폼별 분리 저장. (2026-07-14 이전은 문피아 단독 배열, 07-28 이전은 문피아·노벨피아만)
+ *  paidBench: 그날 스캔한 유료 전환작 벤치마크 행(선택) — 별도 테이블 없이 여기 같이 쌓는다. */
 export type BestDaily = {
   munpia: RankItem[];
   novelpia: RankItem[];
   naverseries: RankItem[];
   kakaopage: RankItem[];
+  paidBench?: PaidTransitionRow[];
 };
 
 export async function saveBestDaily(day: string, data: BestDaily): Promise<void> {
   const db = getDb();
-  if (!db || Object.values(data).every((arr) => !arr.length)) return;
+  const { paidBench, ...lists } = data;
+  if (!db || (Object.values(lists).every((arr) => !arr.length) && !paidBench?.length)) return;
   await db.from("nm_best_daily").upsert({ day, items: data }, { onConflict: "day" });
 }
 
@@ -137,7 +142,21 @@ export async function getBestDaily(day: string): Promise<BestDaily | null> {
     novelpia: items.novelpia ?? [],
     naverseries: items.naverseries ?? [],
     kakaopage: items.kakaopage ?? [],
+    paidBench: items.paidBench ?? [],
   };
+}
+
+/** 최근 N일의 유료 전환 벤치마크 행 전부 (집계는 lib/paidbench.aggregatePaidBench) */
+export async function getRecentPaidBench(days = 90): Promise<PaidTransitionRow[]> {
+  const db = getDb();
+  if (!db) return [];
+  const cutoff = new Date(Date.now() + 9 * 3600_000 - days * 86_400_000).toISOString().slice(0, 10);
+  const { data } = await db.from("nm_best_daily").select("items").gte("day", cutoff);
+  const rows: PaidTransitionRow[] = [];
+  for (const r of (data as { items: Partial<BestDaily> | RankItem[] }[]) ?? []) {
+    if (!Array.isArray(r.items) && r.items?.paidBench) rows.push(...r.items.paidBench);
+  }
+  return rows;
 }
 
 export async function listBestDays(limit = 90): Promise<string[]> {

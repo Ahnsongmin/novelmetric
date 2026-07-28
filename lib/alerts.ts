@@ -1,5 +1,6 @@
 // 스냅샷 변화 감지 → 알림 플래그
 import type { Snapshot } from "./db";
+import type { Retention } from "./munpia";
 
 export type AlertFlag = {
   type: string;
@@ -52,6 +53,26 @@ export function detectAlerts(prev: Snapshot, latest: Snapshot): AlertFlag[] {
     flags.push({ type: "rec_surge", message: `👍 추천 +${dRec.toLocaleString("ko-KR")} 급증`, severity: "good" });
   }
 
+  return flags;
+}
+
+/** [Pro] 갓 확정된 이탈 구간 감지 — 상태 저장 없이 한 번만 알리기 위해,
+ *  이탈 회차의 업로드일이 정확히 3일 전(최신 3화 제외 창을 막 벗어나 처음 평가 가능해진 날)인 것만 알린다. */
+export function detectFreshDropoffs(r: Retention, todayKstYmd: string): AlertFlag[] {
+  const todayMs = new Date(todayKstYmd + "T00:00:00+09:00").getTime();
+  const flags: AlertFlag[] = [];
+  for (const d of r.dropoffs) {
+    const ep = r.episodes.find((e) => e.no === d.no);
+    if (!ep || !/^\d{4}-\d{2}-\d{2}$/.test(ep.date)) continue;
+    const ageDays = Math.round((todayMs - new Date(ep.date + "T00:00:00+09:00").getTime()) / 86_400_000);
+    if (ageDays === 3) {
+      flags.push({
+        type: `dropoff_${d.no}`,
+        message: `🚪 ${d.no}화에서 직전 대비 -${d.dropPct}% 이탈 감지 (${d.from.toLocaleString("ko-KR")} → ${d.to.toLocaleString("ko-KR")}) — 전개·끊는 지점을 점검해 보세요`,
+        severity: "warn",
+      });
+    }
+  }
   return flags;
 }
 
