@@ -4,7 +4,7 @@
 //   GET bff-page.kakao.com/api/gateway/api/v1/content/overview?series_id=...
 // robots.txt 준수(뷰어만 금지) · 공개 데이터만.
 
-import type { NovelStats, RankItem } from "./munpia";
+import type { NovelStats, RankItem, SearchHit } from "./munpia";
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
@@ -29,6 +29,38 @@ type KakaoOverview = {
   };
 };
 
+// ---------- 작품 검색 (제목으로) ----------
+
+type KakaoSearchItem = {
+  series_id?: number;
+  title?: string;
+  category_uid?: number; // 11 = 웹소설
+  sub_category?: string;
+  authors?: string;
+};
+
+/** 제목 키워드로 카카오페이지 웹소설 검색 (웹툰 등 다른 카테고리는 제외) */
+export async function searchNovels(keyword: string, limit = 20): Promise<SearchHit[]> {
+  const kw = keyword.trim();
+  if (!kw) return [];
+  const res = await fetch(
+    `https://bff-page.kakao.com/api/gateway/api/v2/search/series?keyword=${encodeURIComponent(kw)}` +
+      `&category_uid=0&is_complete=false&sort_type=ACCURACY&page=0&size=${limit}`,
+    { headers: { "User-Agent": UA, Referer: "https://page.kakao.com/", Accept: "application/json" } }
+  );
+  if (!res.ok) throw new Error(`HTTP ${res.status} (kakaopage search)`);
+  const list = (findSeriesList(await res.json()) ?? []) as KakaoSearchItem[];
+  return list
+    .filter((it) => it.series_id && it.title && it.category_uid === 11)
+    .map((it) => ({
+      novelId: it.series_id!,
+      title: it.title!,
+      author: it.authors ?? "",
+      genre: it.sub_category ?? "",
+      cover: null,
+    }));
+}
+
 // ---------- 웹소설 실시간 랭킹 ----------
 
 type KakaoRankItem = {
@@ -40,20 +72,20 @@ type KakaoRankItem = {
 };
 
 /** 응답 JSON 어디에 있든 series_id 배열을 찾는다 (뷰 구조 변경에 대한 내성) */
-function findRankList(o: unknown): KakaoRankItem[] | null {
+function findSeriesList(o: unknown): unknown[] | null {
   if (Array.isArray(o)) {
     if (o.length && typeof o[0] === "object" && o[0] !== null && "series_id" in (o[0] as object)) {
-      return o as KakaoRankItem[];
+      return o;
     }
     for (const x of o) {
-      const f = findRankList(x);
+      const f = findSeriesList(x);
       if (f) return f;
     }
     return null;
   }
   if (o && typeof o === "object") {
     for (const v of Object.values(o)) {
-      const f = findRankList(v);
+      const f = findSeriesList(v);
       if (f) return f;
     }
   }
@@ -67,7 +99,7 @@ export async function fetchRanking(): Promise<RankItem[]> {
     { headers: { "User-Agent": UA, Referer: "https://page.kakao.com/", Accept: "application/json" } }
   );
   if (!res.ok) throw new Error(`HTTP ${res.status} (kakaopage ranking)`);
-  const list = findRankList(await res.json()) ?? [];
+  const list = (findSeriesList(await res.json()) ?? []) as KakaoRankItem[];
   return list.map((it, i): RankItem => {
     const rank = Number(it.service_property?.rank);
     return {

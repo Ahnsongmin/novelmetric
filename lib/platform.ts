@@ -77,16 +77,21 @@ export async function fetchEpisodesAny(storageId: number): Promise<Episode[]> {
 
 export type PlatformSearchHit = SearchHit & { platform: Platform };
 
-/** 제목 검색은 문피아·노벨피아만 지원 (시리즈·카카페는 URL 입력). 반환 novelId는 저장 ID. */
+/** 제목 검색: 문피아·노벨피아·카카오페이지 동시 (네이버시리즈는 검색 경로가 robots 금지 → URL 입력만).
+ *  반환 novelId는 저장 ID. */
 export async function searchAllPlatforms(keyword: string, limitEach = 10): Promise<PlatformSearchHit[]> {
-  const [mp, np] = await Promise.all([
+  const [mp, np, kp] = await Promise.all([
     munpia.searchNovels(keyword, limitEach).catch(() => [] as SearchHit[]),
     novelpia.searchNovels(keyword, limitEach).catch(() => [] as SearchHit[]),
+    kakaopage.searchNovels(keyword, limitEach).catch(() => [] as SearchHit[]),
   ]);
   return [
     ...mp.map((h): PlatformSearchHit => ({ ...h, platform: "munpia" })),
     ...np.map(
       (h): PlatformSearchHit => ({ ...h, novelId: toStorageId("novelpia", h.novelId), platform: "novelpia" })
+    ),
+    ...kp.map(
+      (h): PlatformSearchHit => ({ ...h, novelId: toStorageId("kakaopage", h.novelId), platform: "kakaopage" })
     ),
   ];
 }
