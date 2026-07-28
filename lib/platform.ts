@@ -77,15 +77,29 @@ export async function fetchEpisodesAny(storageId: number): Promise<Episode[]> {
 
 export type PlatformSearchHit = SearchHit & { platform: Platform };
 
+/** 검색어 대비 제목 관련도 점수 — 플랫폼 순서와 무관하게 정확히 맞는 제목이 위로 오게 한다 */
+function relevance(title: string, keyword: string): number {
+  const t = title.replace(/\s+/g, "");
+  const k = keyword.replace(/\s+/g, "");
+  if (!t || !k) return 0;
+  if (t === k) return 100;
+  if (t.includes(k)) return 60;
+  if (k.includes(t)) return 50;
+  // 검색어 어절이 제목에 몇 개나 들어있는지
+  const tokens = keyword.split(/\s+/).filter((w) => w.length >= 2);
+  if (!tokens.length) return 0;
+  return (tokens.filter((w) => title.includes(w)).length / tokens.length) * 40;
+}
+
 /** 제목 검색: 문피아·노벨피아·카카오페이지 동시 (네이버시리즈는 검색 경로가 robots 금지 → URL 입력만).
- *  반환 novelId는 저장 ID. */
+ *  반환 novelId는 저장 ID. 관련도 높은 순으로 정렬. */
 export async function searchAllPlatforms(keyword: string, limitEach = 10): Promise<PlatformSearchHit[]> {
   const [mp, np, kp] = await Promise.all([
     munpia.searchNovels(keyword, limitEach).catch(() => [] as SearchHit[]),
     novelpia.searchNovels(keyword, limitEach).catch(() => [] as SearchHit[]),
     kakaopage.searchNovels(keyword, limitEach).catch(() => [] as SearchHit[]),
   ]);
-  return [
+  const hits = [
     ...mp.map((h): PlatformSearchHit => ({ ...h, platform: "munpia" })),
     ...np.map(
       (h): PlatformSearchHit => ({ ...h, novelId: toStorageId("novelpia", h.novelId), platform: "novelpia" })
@@ -94,4 +108,9 @@ export async function searchAllPlatforms(keyword: string, limitEach = 10): Promi
       (h): PlatformSearchHit => ({ ...h, novelId: toStorageId("kakaopage", h.novelId), platform: "kakaopage" })
     ),
   ];
+  // 관련도 내림차순, 같은 점수끼리는 원래 순서 유지 (sort는 stable)
+  return hits
+    .map((h) => ({ h, score: relevance(h.title, keyword) }))
+    .sort((a, b) => b.score - a.score)
+    .map((x) => x.h);
 }
