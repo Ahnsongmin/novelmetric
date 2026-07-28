@@ -66,7 +66,7 @@ export default function Home() {
         <Comparison />
         <Roadmap />
         <FAQ />
-        <Waitlist />
+        <FinalCta />
       </main>
       <Footer />
     </>
@@ -93,14 +93,11 @@ function Header() {
           <a href="/dashboard" className="rounded-full px-3 py-1.5 text-muted transition hover:text-foreground">
             대시보드
           </a>
-          <a href="/pro" className="rounded-full px-3 py-1.5 font-semibold text-accent transition hover:text-foreground">
-            Pro
-          </a>
           <a
-            href="#waitlist"
-            className="rounded-full border border-border px-4 py-1.5 text-muted transition hover:border-accent hover:text-foreground"
+            href="/pro"
+            className="rounded-full border border-border px-4 py-1.5 font-semibold text-accent transition hover:border-accent hover:text-foreground"
           >
-            출시 알림
+            Pro
           </a>
         </nav>
       </div>
@@ -346,7 +343,7 @@ function ResultView({ result, title }: { result: DiagnoseResult; title: string }
       <ResultEmailCapture />
 
       <p className="pt-1 text-center text-[11px] text-muted">
-        {result.engine === "claude" ? "특화 AI 정밀 진단" : "샘플 진단(데모)"} · 더 깊은 분석은 출시 후 제공됩니다
+        {result.engine === "claude" ? "특화 AI 정밀 진단" : "샘플 진단(데모)"} · 더 깊은 분석은 Pro에서 제공됩니다
       </p>
     </div>
   );
@@ -623,19 +620,19 @@ function Roadmap() {
       tag: "지금",
       on: true,
       title: "순위·조회수 추적 대시보드",
-      desc: "문피아·노벨피아 작품 지표 조회 + 추적 등록 (매일 자동 수집) — /dashboard",
+      desc: "문피아·노벨피아·네이버시리즈·카카오페이지 작품 지표 조회 + 추적 등록 (매일 자동 수집) — /dashboard",
     },
     {
-      tag: "출시 예정",
-      on: false,
-      title: "트렌드 키워드 리포트",
-      desc: "지금 뜨는 소재·클리셰·키워드를 주간으로",
+      tag: "지금",
+      on: true,
+      title: "연독률·이탈 구간 분석",
+      desc: "회차별 연독률과 독자가 떨어지는 회차 탐지, 유료 전환작은 무료/유료 구간 분리 분석",
     },
     {
-      tag: "출시 예정",
-      on: false,
-      title: "댓글 이탈 분석 + 주간 알림",
-      desc: "몇 화에서 독자가 떨어지는지, 순위 급변 알림",
+      tag: "지금",
+      on: true,
+      title: "트렌드 리포트 + 변화 알림",
+      desc: "4개 플랫폼 베스트 제목 패턴·장르 분석 매일 자동 발행(/insights), 선작·조회 급변 이메일 알림",
     },
   ];
   return (
@@ -667,69 +664,30 @@ function Roadmap() {
   );
 }
 
-function Waitlist() {
-  const [email, setEmail] = useState("");
-  const [done, setDone] = useState(false);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-    try {
-      const res = await fetch("/api/waitlist", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, source: "landing" }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "등록 실패");
-      setDone(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "오류가 발생했어요.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
+function FinalCta() {
   return (
-    <section id="waitlist" className="mx-auto max-w-3xl px-5 py-16">
+    <section id="start" className="mx-auto max-w-3xl px-5 py-16">
       <div className="rounded-3xl border border-border bg-gradient-to-br from-card to-card/30 p-8 text-center md:p-10">
-        <h2 className="text-2xl font-bold md:text-3xl">정식 출시 알림 받기</h2>
+        <h2 className="text-2xl font-bold md:text-3xl">지금 바로 시작하세요</h2>
         <p className="mx-auto mt-2 max-w-md text-muted">
-          순위 추적 대시보드·트렌드 리포트가 준비되면 가장 먼저 알려드릴게요.
+          가입 없이 제목 진단과 연독률·투베 분석을 무료로 쓸 수 있어요.
           <br />
-          초기 신청자에게는 <b className="text-foreground">Pro 무료 체험</b>을 드립니다.
+          제목 무제한 진단·작품 무제한 추적이 필요하면 <b className="text-foreground">Pro</b>로 열립니다.
         </p>
-        {done ? (
-          <p className="mx-auto mt-6 max-w-sm rounded-xl border border-accent/50 bg-accent/10 px-4 py-3 text-sm">
-            🎉 신청 완료! 출시되면 가장 먼저 연락드릴게요.
-          </p>
-        ) : (
-          <form onSubmit={submit} className="mx-auto mt-6 flex max-w-md flex-col gap-2 sm:flex-row">
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="이메일 주소"
-              className="flex-1 rounded-lg border border-border bg-background/60 px-4 py-3 text-sm outline-none transition focus:border-accent"
-            />
-            <button
-              type="submit"
-              disabled={loading}
-              className="rounded-lg bg-gradient-to-r from-accent to-accent-2 px-6 py-3 font-bold text-background transition hover:opacity-90 disabled:opacity-60"
-            >
-              {loading ? "등록 중…" : "신청"}
-            </button>
-          </form>
-        )}
-        {error && (
-          <p role="alert" className="mt-3 text-sm text-accent-2">
-            {error}
-          </p>
-        )}
+        <div className="mx-auto mt-6 flex max-w-md flex-col justify-center gap-2 sm:flex-row">
+          <a
+            href="/dashboard"
+            className="rounded-lg bg-gradient-to-r from-accent to-accent-2 px-6 py-3 font-bold text-background transition hover:opacity-90"
+          >
+            무료로 분석 시작
+          </a>
+          <a
+            href="/pro"
+            className="rounded-lg border border-border px-6 py-3 font-semibold text-foreground transition hover:border-accent"
+          >
+            Pro 보기
+          </a>
+        </div>
       </div>
     </section>
   );
