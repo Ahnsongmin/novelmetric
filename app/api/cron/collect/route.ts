@@ -15,7 +15,7 @@ import {
   dbEnabled,
 } from "@/lib/db";
 import { detectAlerts, detectFreshDropoffs, digestText } from "@/lib/alerts";
-import { buildWeeklyReport } from "@/lib/weekly";
+import { buildWeeklyReport, buildCompareReport, type CompareWork } from "@/lib/weekly";
 import { notify } from "@/lib/notify";
 import { scoreCuriosity } from "@/lib/curiosity";
 import { scanPaidTransitions } from "@/lib/paidbench";
@@ -142,20 +142,31 @@ export async function GET(req: NextRequest) {
   const kstDow = new Date(Date.now() + 9 * 3600_000).getUTCDay();
   const weeklyForced = req.nextUrl.searchParams.get("weekly") === "1";
   let weeklySent = 0;
+  let compareSent = 0;
   // 정기(Vercel cron) 월요일에만 자동 발송 — 수동/외부 트리거 재실행 시 중복 메일 방지
   if ((kstDow === 1 && isVercelCron) || weeklyForced) {
     const targets = await listWeeklyTargets();
+    // [Pro] 경쟁작 워치 — 같은 연락처가 추적하는 작품들을 모아 주간 비교표를 한 통으로
+    const compareByContact = new Map<string, Map<number, CompareWork>>();
     for (const t of targets) {
       try {
         const snaps = await getSnapshots(t.novel_id, 10);
         const stats = await fetchNovelAny(t.novel_id).catch(() => null);
         if (!stats) continue;
         const eps = await fetchEpisodesAny(t.novel_id).catch(() => []);
+        const retention = eps.length ? computeRetention(eps) : null;
+        if (!compareByContact.has(t.contact)) compareByContact.set(t.contact, new Map());
+        compareByContact.get(t.contact)!.set(t.novel_id, {
+          title: stats.title,
+          platform: platformOf(t.novel_id),
+          snaps,
+          retention,
+        });
         const report = buildWeeklyReport({
           title: stats.title,
           platform: platformOf(t.novel_id),
           snaps,
-          retention: eps.length ? computeRetention(eps) : null,
+          retention,
         });
         if (!report) continue;
         const r = await notify("email", t.contact, report.subject, report.body);
@@ -164,6 +175,13 @@ export async function GET(req: NextRequest) {
       } catch {
         // 개별 실패는 다음 대상 계속
       }
+    }
+    for (const [contact, works] of compareByContact) {
+      const report = buildCompareReport([...works.values()]);
+      if (!report) continue; // 2작품 미만 또는 비교창 미성립
+      const r = await notify("email", contact, report.subject, report.body);
+      if (r.sent) compareSent++;
+      await sleep(800);
     }
   }
 
@@ -174,6 +192,7 @@ export async function GET(req: NextRequest) {
     total: ids.length,
     notified,
     weeklySent,
+    compareSent,
     bestSaved,
     benchScanned,
     dropoffAlerted,

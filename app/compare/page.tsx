@@ -57,7 +57,10 @@ export default function ComparePage() {
       </a>
       <h1 className="mt-3 text-2xl font-bold md:text-3xl">작품 비교</h1>
       <p className="mt-1.5 text-muted">
-        내 작품과 경쟁작을 나란히 비교하세요. 연독률·선작·조회수·추천을 한눈에. (작품 ID 또는 문피아·노벨피아 URL)
+        내 작품과 경쟁작을 나란히 비교하세요. 연독률·선작·조회수·추천을 한눈에. (작품 ID 또는 문피아·노벨피아·네이버시리즈·카카오페이지 URL)
+      </p>
+      <p className="mt-2 text-xs text-muted">
+        💎 <a href="/pro" className="text-accent underline">Pro</a>면 추적 작품끼리 매주 자동 비교 메일(<b className="text-foreground">경쟁작 워치</b>)로 받아볼 수 있어요.
       </p>
 
       <form onSubmit={compare} className="mt-6 space-y-2">

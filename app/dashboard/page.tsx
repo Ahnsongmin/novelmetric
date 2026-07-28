@@ -1108,7 +1108,8 @@ function ProTrendPanel({
         <p className="mt-2 text-sm text-muted">
           추적 데이터 {pts.length}일치가 쌓여 있어요. Pro 패스를 적용하면 <b className="text-foreground">일별
           증감표 · 하루 평균 성장 속도 · 이정표 도달 예상</b>을 볼 수 있고, 매주 월요일{" "}
-          <b className="text-foreground">주간 성장 리포트 이메일</b>도 받아요.
+          <b className="text-foreground">주간 성장 리포트</b>와 추적 작품끼리의{" "}
+          <b className="text-foreground">경쟁작 워치 비교 메일</b>도 받아요.
         </p>
         <a
           href="/pro"
