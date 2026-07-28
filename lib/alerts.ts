@@ -66,10 +66,17 @@ export type NovelDigest = {
 };
 
 export function digestText(d: NovelDigest): string {
+  // 선작이 없는 플랫폼(네이버시리즈·카카오페이지)은 조회수만 표기
+  const now = [
+    d.latest.favorites != null ? `선작 ${d.latest.favorites.toLocaleString("ko-KR")}` : null,
+    `조회 ${(d.latest.views ?? 0).toLocaleString("ko-KR")}`,
+  ]
+    .filter(Boolean)
+    .join(" / ");
   const lines = [
     `[노블메트릭] "${d.title}" 변화 알림`,
     ...d.flags.map((f) => `· ${f.message}`),
-    `현재 선작 ${(d.latest.favorites ?? 0).toLocaleString("ko-KR")} / 조회 ${(d.latest.views ?? 0).toLocaleString("ko-KR")}`,
+    `현재 ${now}`,
     `→ https://novelmetric.vercel.app/dashboard`,
   ];
   return lines.join("\n");
