@@ -18,8 +18,8 @@ const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { day } = await params;
   return {
-    title: `${day} 문피아·노벨피아 베스트 제목 패턴 분석`,
-    description: `${day} 문피아 투데이베스트·노벨피아 TOP100의 후킹 클리셰 순위, 장르 분포, 제목 키워드 분석 리포트.`,
+    title: `${day} 문피아·노벨피아·시리즈·카카페 베스트 제목 패턴 분석`,
+    description: `${day} 문피아 투데이베스트·노벨피아 TOP100·네이버시리즈 TOP100·카카오페이지 랭킹의 후킹 클리셰 순위, 장르 분포, 제목 키워드 분석 리포트.`,
   };
 }
 
@@ -27,7 +27,7 @@ export default async function InsightDayPage({ params }: Props) {
   const { day } = await params;
   if (!DAY_RE.test(day)) notFound();
   const data = await getBestDaily(day);
-  if (!data || (!data.munpia.length && !data.novelpia.length)) notFound();
+  if (!data || Object.values(data).every((arr) => !arr.length)) notFound();
 
   const days = await listBestDays(90);
   const idx = days.indexOf(day);
@@ -37,6 +37,8 @@ export default async function InsightDayPage({ params }: Props) {
   const sections = [
     { key: "munpia", label: "문피아 투데이베스트", items: data.munpia },
     { key: "novelpia", label: "노벨피아 TOP100", items: data.novelpia },
+    { key: "naverseries", label: "네이버시리즈 TOP100", items: data.naverseries },
+    { key: "kakaopage", label: "카카오페이지 랭킹", items: data.kakaopage },
   ].filter((s) => s.items.length > 0);
 
   return (

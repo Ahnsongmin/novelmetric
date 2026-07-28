@@ -8,8 +8,9 @@ import { listBestDays } from "@/lib/db";
 export const revalidate = 3600;
 
 export const metadata: Metadata = {
-  title: "웹소설 트렌드 리포트 — 문피아·노벨피아 베스트 일일 분석",
-  description: "매일 자동 수집한 문피아 투데이베스트·노벨피아 TOP100의 제목 패턴·후킹 키워드·장르 분포 분석 아카이브.",
+  title: "웹소설 트렌드 리포트 — 문피아·노벨피아·시리즈·카카페 베스트 일일 분석",
+  description:
+    "매일 자동 수집한 문피아 투데이베스트·노벨피아 TOP100·네이버시리즈 TOP100·카카오페이지 랭킹의 제목 패턴·후킹 키워드·장르 분포 분석 아카이브.",
 };
 
 export default async function InsightsPage() {
@@ -20,7 +21,8 @@ export default async function InsightsPage() {
       <a href="/" className="text-sm text-muted hover:text-foreground">← 노블메트릭</a>
       <h1 className="mt-3 text-3xl font-bold">웹소설 트렌드 리포트</h1>
       <p className="mt-2 text-muted">
-        매일 수집한 문피아 투데이베스트·노벨피아 TOP100을 분석해 제목 패턴·후킹 키워드·장르 분포를 기록합니다.
+        매일 수집한 문피아·노벨피아·네이버시리즈·카카오페이지 베스트를 분석해 제목 패턴·후킹 키워드·장르 분포를
+        기록합니다.
         오늘의 실시간 분석은 <Link href="/best" className="text-accent hover:underline">베스트 분석</Link>에서.
       </p>
 
@@ -36,7 +38,7 @@ export default async function InsightsPage() {
                 href={`/insights/${d}`}
                 className="block rounded-xl border border-border bg-card/60 px-5 py-3.5 text-sm transition hover:border-accent"
               >
-                📊 {d} 문피아·노벨피아 베스트 제목 패턴 분석
+                📊 {d} 웹소설 플랫폼 베스트 제목 패턴 분석
               </Link>
             </li>
           ))}

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchBest100WithViews, computeRetention, type RankItem } from "@/lib/munpia";
 import { fetchTop100 } from "@/lib/novelpia";
+import { fetchTop100 as fetchSeriesTop100 } from "@/lib/naverseries";
+import { fetchRanking as fetchKakaoRanking } from "@/lib/kakaopage";
 import { fetchNovelAny, fetchEpisodesAny, platformOf } from "@/lib/platform";
 import {
   listTrackedNovelIds,
@@ -34,17 +36,24 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, reason: "DB 미연결(Supabase 키 없음)" });
   }
 
-  // 오늘 베스트 아카이브 (문피아·노벨피아 TOP100) — /insights 자동 콘텐츠의 원천
+  // 오늘 베스트 아카이브 (문피아·노벨피아·네이버시리즈·카카오페이지) — /insights 자동 콘텐츠의 원천
   let bestSaved = false;
   try {
-    const [munpia, novelpia] = await Promise.all([
+    const [munpia, novelpia, naverseries, kakaopage] = await Promise.all([
       fetchBest100WithViews().catch(() => [] as RankItem[]),
       fetchTop100().catch(() => [] as RankItem[]),
+      fetchSeriesTop100().catch(() => [] as RankItem[]),
+      fetchKakaoRanking().catch(() => [] as RankItem[]),
     ]);
     // 제목 궁금증 지수 채점(플랫폼별 1회 호출). 실패해도 수집은 계속 — 점수만 비워진다.
-    await Promise.all([attachCuriosity(munpia), attachCuriosity(novelpia)]);
-    await saveBestDaily(kstToday(), { munpia, novelpia });
-    bestSaved = munpia.length > 0 || novelpia.length > 0;
+    await Promise.all([
+      attachCuriosity(munpia),
+      attachCuriosity(novelpia),
+      attachCuriosity(naverseries),
+      attachCuriosity(kakaopage),
+    ]);
+    await saveBestDaily(kstToday(), { munpia, novelpia, naverseries, kakaopage });
+    bestSaved = [munpia, novelpia, naverseries, kakaopage].some((a) => a.length > 0);
   } catch {
     // 베스트 수집 실패해도 추적 수집은 계속
   }

@@ -2,71 +2,83 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { fetchBest100WithViews, type RankItem } from "@/lib/munpia";
 import { fetchTop100 } from "@/lib/novelpia";
+import { fetchTop100 as fetchSeriesTop100 } from "@/lib/naverseries";
+import { fetchRanking as fetchKakaoRanking } from "@/lib/kakaopage";
 import { analyzeBest } from "@/lib/analyze";
 
 export const revalidate = 3600; // 1시간마다 갱신(ISR)
 
 export const metadata: Metadata = {
-  title: "문피아·노벨피아 오늘 베스트 TOP100 + 제목 패턴 분석",
+  title: "문피아·노벨피아·네이버시리즈·카카오페이지 오늘 베스트 + 제목 패턴 분석",
   description:
-    "문피아 투데이베스트·노벨피아 TOP100 실시간 순위와, 상위작 제목에 가장 많이 쓰인 후킹 키워드·장르 분포를 데이터로 분석합니다.",
+    "문피아 투데이베스트·노벨피아 TOP100·네이버시리즈 TOP100·카카오페이지 실시간 랭킹과, 상위작 제목에 가장 많이 쓰인 후킹 키워드·장르 분포를 데이터로 분석합니다.",
 };
 
 function fmt(n: number | null | undefined) {
   return n == null ? "-" : n.toLocaleString("ko-KR");
 }
 
+type BestPlatform = "munpia" | "novelpia" | "naverseries" | "kakaopage";
+
+const TABS: { key: BestPlatform; label: string; listName: string; fetch: () => Promise<RankItem[]> }[] = [
+  { key: "munpia", label: "문피아", listName: "문피아 투데이베스트 TOP100", fetch: fetchBest100WithViews },
+  { key: "novelpia", label: "노벨피아", listName: "노벨피아 TOP100", fetch: fetchTop100 },
+  { key: "naverseries", label: "네이버시리즈", listName: "네이버시리즈 일간 TOP100", fetch: fetchSeriesTop100 },
+  { key: "kakaopage", label: "카카오페이지", listName: "카카오페이지 실시간 랭킹 TOP50", fetch: fetchKakaoRanking },
+];
+
 type Props = { searchParams: Promise<{ p?: string }> };
 
 export default async function BestPage({ searchParams }: Props) {
   const { p } = await searchParams;
-  const platform = p === "novelpia" ? "novelpia" : "munpia";
+  const tab = TABS.find((t) => t.key === p) ?? TABS[0];
+  const platform = tab.key;
 
   let items: RankItem[] = [];
   let failed = false;
   try {
-    items = platform === "novelpia" ? await fetchTop100() : await fetchBest100WithViews();
+    items = await tab.fetch();
   } catch {
     failed = true;
   }
   const a = analyzeBest(items);
   const hookLift =
     a.avgViewsNoHook > 0 ? Math.round((a.avgViewsWithHook / a.avgViewsNoHook) * 10) / 10 : null;
-  const isNovelpia = platform === "novelpia";
+  // 표 마지막 열: 플랫폼별로 제공되는 수치가 다르다
+  const valueCol =
+    platform === "munpia"
+      ? { header: "조회수", of: (it: RankItem) => fmt(it.views) }
+      : platform === "novelpia"
+        ? { header: "선호", of: (it: RankItem) => fmt(it.favorites) }
+        : platform === "naverseries"
+          ? { header: "화수", of: (it: RankItem) => (it.episodes == null ? "-" : `${fmt(it.episodes)}화`) }
+          : { header: "누적 열람수", of: (it: RankItem) => fmt(it.views) };
 
   return (
     <main className="mx-auto max-w-4xl flex-1 px-5 py-10">
       <a href="/" className="text-sm text-muted hover:text-foreground">
         ← 노블메트릭
       </a>
-      <h1 className="mt-3 text-2xl font-bold md:text-3xl">오늘 베스트 TOP100 · 제목 패턴 분석</h1>
+      <h1 className="mt-3 text-2xl font-bold md:text-3xl">오늘 베스트 · 제목 패턴 분석</h1>
       <p className="mt-1.5 text-muted">
-        {isNovelpia ? "노벨피아 TOP100" : "문피아 투데이베스트 TOP100"}을 수집해, 잘 팔리는 제목의
-        공통점을 데이터로 보여드립니다. (1시간마다 갱신)
+        {tab.listName}을 수집해, 잘 팔리는 제목의 공통점을 데이터로 보여드립니다. (1시간마다 갱신)
       </p>
 
       {/* 플랫폼 탭 */}
-      <div className="mt-5 flex gap-2">
-        <Link
-          href="/best"
-          className={`rounded-full border px-4 py-2 text-sm font-bold transition ${
-            !isNovelpia
-              ? "border-accent bg-accent/15 text-foreground"
-              : "border-border text-muted hover:text-foreground"
-          }`}
-        >
-          문피아
-        </Link>
-        <Link
-          href="/best?p=novelpia"
-          className={`rounded-full border px-4 py-2 text-sm font-bold transition ${
-            isNovelpia
-              ? "border-accent bg-accent/15 text-foreground"
-              : "border-border text-muted hover:text-foreground"
-          }`}
-        >
-          노벨피아
-        </Link>
+      <div className="mt-5 flex flex-wrap gap-2">
+        {TABS.map((t) => (
+          <Link
+            key={t.key}
+            href={t.key === "munpia" ? "/best" : `/best?p=${t.key}`}
+            className={`rounded-full border px-4 py-2 text-sm font-bold transition ${
+              platform === t.key
+                ? "border-accent bg-accent/15 text-foreground"
+                : "border-border text-muted hover:text-foreground"
+            }`}
+          >
+            {t.label}
+          </Link>
+        ))}
       </div>
 
       {failed && (
@@ -95,9 +107,7 @@ export default async function BestPage({ searchParams }: Props) {
             ) : (
               <Card title="분석 표본">
                 TOP {a.total}
-                <span className="block text-xs font-normal text-muted">
-                  {isNovelpia ? "노벨피아 실시간 랭킹" : "문피아 투데이베스트"}
-                </span>
+                <span className="block text-xs font-normal text-muted">{tab.listName}</span>
               </Card>
             )}
           </section>
@@ -144,7 +154,7 @@ export default async function BestPage({ searchParams }: Props) {
           {/* 베스트 표 */}
           <section className="mt-9">
             <h2 className="text-lg font-bold">
-              📈 {isNovelpia ? "노벨피아" : "문피아"} 베스트 TOP {items.length}
+              📈 {tab.label} 베스트 TOP {items.length}
             </h2>
             <div className="mt-3 overflow-x-auto rounded-xl border border-border">
               <table className="w-full text-sm">
@@ -154,11 +164,7 @@ export default async function BestPage({ searchParams }: Props) {
                     <th className="px-3 py-2 text-left">제목</th>
                     <th className="px-3 py-2 text-left">장르</th>
                     <th className="px-3 py-2 text-left">작가</th>
-                    {isNovelpia ? (
-                      <th className="px-3 py-2 text-right">선호</th>
-                    ) : (
-                      <th className="px-3 py-2 text-right">조회수</th>
-                    )}
+                    <th className="px-3 py-2 text-right">{valueCol.header}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -166,18 +172,22 @@ export default async function BestPage({ searchParams }: Props) {
                     <tr key={it.rank} className="border-t border-border/60">
                       <td className="px-3 py-2 font-bold text-accent">{it.rank}</td>
                       <td className="px-3 py-2">{it.title}</td>
-                      <td className="px-3 py-2 text-muted">{it.genre}</td>
+                      <td className="px-3 py-2 text-muted">{it.genre || "-"}</td>
                       <td className="px-3 py-2 text-muted">{it.author}</td>
-                      <td className="px-3 py-2 text-right">
-                        {isNovelpia ? fmt(it.favorites) : fmt(it.views)}
-                      </td>
+                      <td className="px-3 py-2 text-right">{valueCol.of(it)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            {!isNovelpia && (
+            {platform === "munpia" && (
               <p className="mt-2 text-xs text-muted">* 조회수는 상위 10위까지 제공됩니다.</p>
+            )}
+            {platform === "naverseries" && (
+              <p className="mt-2 text-xs text-muted">
+                * 네이버시리즈는 랭킹에 조회수를 제공하지 않아요. 장르는 장르별 랭킹 상위와 대조한 값이라 일부는
+                &quot;-&quot;로 표시됩니다.
+              </p>
             )}
           </section>
 
