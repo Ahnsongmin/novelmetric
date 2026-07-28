@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 type Stats = {
   novelId: number;
-  platform?: "munpia" | "novelpia";
+  platform?: "munpia" | "novelpia" | "naverseries" | "kakaopage";
   title: string;
   genre: string;
   author: string;
@@ -72,7 +72,7 @@ type Resp = {
 
 type SearchHit = {
   novelId: number;
-  platform?: "munpia" | "novelpia";
+  platform?: "munpia" | "novelpia" | "naverseries" | "kakaopage";
   title: string;
   author: string;
   genre: string;
@@ -80,10 +80,20 @@ type SearchHit = {
 };
 
 const NOVELPIA_ID_BASE = 1_000_000_000;
-const PLATFORM_LABEL = { munpia: "문피아", novelpia: "노벨피아" } as const;
+const SERIES_ID_BASE = 2_000_000_000;
+const KAKAO_ID_BASE = 3_000_000_000;
+const PLATFORM_LABEL = {
+  munpia: "문피아",
+  novelpia: "노벨피아",
+  naverseries: "네이버시리즈",
+  kakaopage: "카카오페이지",
+} as const;
 
 function displayId(id: number) {
-  return id >= NOVELPIA_ID_BASE ? id - NOVELPIA_ID_BASE : id;
+  if (id >= KAKAO_ID_BASE) return id - KAKAO_ID_BASE;
+  if (id >= SERIES_ID_BASE) return id - SERIES_ID_BASE;
+  if (id >= NOVELPIA_ID_BASE) return id - NOVELPIA_ID_BASE;
+  return id;
 }
 
 // 투베 진입 적기 벤치마크 (작가 통념: 선작 200)
@@ -158,8 +168,14 @@ export default function DashboardPage() {
     e.preventDefault();
     const term = q.trim();
     if (!term) return;
-    // ID(숫자) 또는 문피아·노벨피아 URL이면 바로 분석, 아니면 제목 검색
-    if (/^\d+$/.test(term) || /munpia\.com\/.*\d+/.test(term) || /novelpia\.com\/novel\/\d+/.test(term)) {
+    // ID(숫자) 또는 플랫폼 URL이면 바로 분석, 아니면 제목 검색 (제목 검색은 문피아·노벨피아만)
+    if (
+      /^\d+$/.test(term) ||
+      /munpia\.com\/.*\d+/.test(term) ||
+      /novelpia\.com\/novel\/\d+/.test(term) ||
+      /series\.naver\.com\/.*productNo=\d+/.test(term) ||
+      /page\.kakao\.com\/(?:content|home\/[^/]+)\/\d+/.test(term)
+    ) {
       analyzeById(term);
       return;
     }
@@ -214,15 +230,15 @@ export default function DashboardPage() {
       </a>
       <h1 className="mt-3 text-2xl font-bold md:text-3xl">작품 성장 대시보드</h1>
       <p className="mt-1.5 text-muted">
-        <b className="text-foreground">작품 제목</b>으로 검색하거나 문피아·노벨피아 URL을 넣으면, 연독률·선작·조회수를
-        자동 계산하고 투베 진입 게이지·추이를 보여줍니다.
+        <b className="text-foreground">작품 제목</b>으로 검색하거나 문피아·노벨피아·네이버시리즈·카카오페이지 URL을
+        넣으면, 연독률·선작·조회수를 자동 계산하고 투베 진입 게이지·추이를 보여줍니다. (연독률은 문피아·노벨피아 지원)
       </p>
 
       <form onSubmit={lookup} className="mt-6 flex flex-col gap-2 sm:flex-row">
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="작품 제목 검색  또는  문피아·노벨피아 URL"
+          placeholder="작품 제목 검색  또는  문피아·노벨피아·시리즈·카카페 URL"
           aria-label="작품 제목 검색 또는 문피아·노벨피아 URL·작품 ID"
           className="flex-1 rounded-lg border border-border bg-background/60 px-4 py-3 text-sm outline-none transition focus:border-accent"
         />
@@ -323,7 +339,10 @@ export default function DashboardPage() {
 
           <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
             <Metric label="연재 화수" value={data.stats.episodes} unit="화" />
-            <Metric label="조회수" value={data.stats.views} />
+            <Metric
+              label={data.stats.platform === "naverseries" ? "다운로드 수" : "조회수"}
+              value={data.stats.views}
+            />
             <Metric label="추천수" value={data.stats.recommends} />
             <Metric label="선호작수" value={data.stats.favorites} highlight />
             <Metric label="글자수" value={data.stats.chars} />
@@ -336,6 +355,11 @@ export default function DashboardPage() {
           {data.stats.platform !== "novelpia" && <MilestoneCard favorites={data.stats.favorites} />}
 
           {data.retention && <RetentionPanel r={data.retention} />}
+
+          {!data.retention &&
+            (data.stats.platform === "naverseries" || data.stats.platform === "kakaopage") && (
+              <PlatformLimitNotice platform={data.stats.platform} />
+            )}
 
           <ConversionCard favorites={data.stats.favorites} firstViews={data.retention?.firstViews ?? null} />
 
@@ -451,7 +475,9 @@ function Prescription({ data }: { data: Resp }) {
   let text: string;
   let tone: "good" | "warn" | "info" = "info";
 
-  if (ret !== null && ret < 50) {
+  if (data.stats.platform === "naverseries" || data.stats.platform === "kakaopage") {
+    text = `이 플랫폼은 회차별 데이터가 비공개라 일일 추적 추이가 핵심 지표예요. 아래에서 매일 추적을 켜 두면 성장 속도를 보여드립니다.`;
+  } else if (ret !== null && ret < 50) {
     tone = "warn";
     text = hasDrop
       ? `연독률이 낮습니다(${ret}%). 이탈 구간(${data.retention!.dropoffs[0].no}화)의 전개·끊은 지점을 먼저 손보세요.`
@@ -941,6 +967,22 @@ function RetentionPanel({ r }: { r: Retention }) {
   );
 }
 
+function PlatformLimitNotice({ platform }: { platform: "naverseries" | "kakaopage" }) {
+  const label = PLATFORM_LABEL[platform];
+  const viewsLabel = platform === "naverseries" ? "다운로드 수" : "누적 열람수";
+  return (
+    <div className="rounded-xl border border-border bg-card/40 p-4">
+      <p className="text-sm font-bold">📉 {label}는 회차별 조회수를 공개하지 않아요</p>
+      <p className="mt-1.5 text-sm text-muted">
+        회차별 데이터가 없어 <b className="text-foreground">연독률·이탈 구간 분석은 제공되지 않습니다.</b> 대신
+        아래에서 <b className="text-foreground">이 작품 매일 추적</b>을 켜면 {viewsLabel}를 매일 수집해{" "}
+        <b className="text-foreground">하루하루 얼마나 읽히는지 추이</b>로 보여드려요. 문피아·노벨피아에 같은 작품을
+        연재 중이라면 그쪽 URL로 조회하면 연독률까지 볼 수 있습니다.
+      </p>
+    </div>
+  );
+}
+
 function ConversionCard({ favorites, firstViews }: { favorites: number | null; firstViews: number | null }) {
   if (!favorites || !firstViews) return null;
   const rate = Math.round((favorites / firstViews) * 1000) / 10; // 1화 유입 대비 선작률(%)
@@ -1044,7 +1086,7 @@ function ProTrendPanel({
   isPro,
 }: {
   history: Snapshot[];
-  platform?: "munpia" | "novelpia";
+  platform?: "munpia" | "novelpia" | "naverseries" | "kakaopage";
   favorites: number | null;
   isPro: boolean;
 }) {
