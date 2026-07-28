@@ -35,9 +35,14 @@ export function computeCadence(eps: Episode[], now: Date = new Date()): Cadence 
   const cutoff30 = now.getTime() - 30 * DAY;
   const recent30 = dates.filter((t) => t >= cutoff30).length;
 
-  // 변동계수(표준편차/평균)로 규칙성 판정
-  const mean = avgGap || 1;
-  const variance = gaps.reduce((s, g) => s + (g - mean) ** 2, 0) / gaps.length;
+  // 변동계수(표준편차/평균)로 규칙성 판정.
+  // 같은 날 연참(0일 간격)은 불규칙이 아니라 보너스이므로, 업로드가 있었던 '날짜' 간격 기준으로 계산한다.
+  const uniqDates = [...new Set(dates)];
+  const dayGaps: number[] = [];
+  for (let i = 1; i < uniqDates.length; i++) dayGaps.push((uniqDates[i] - uniqDates[i - 1]) / DAY);
+  const regGaps = dayGaps.length ? dayGaps : gaps;
+  const mean = regGaps.reduce((s, g) => s + g, 0) / regGaps.length || 1;
+  const variance = regGaps.reduce((s, g) => s + (g - mean) ** 2, 0) / regGaps.length;
   const cv = Math.sqrt(variance) / mean;
   const regularity: Cadence["regularity"] = cv < 0.4 ? "규칙적" : cv < 0.9 ? "다소 불규칙" : "불규칙";
 
