@@ -22,7 +22,7 @@ type Snapshot = {
   favorites: number | null;
   collected_at: string;
 };
-type Episode = { no: number; title: string; date: string; views: number | null };
+type Episode = { no: number; title: string; date: string; views: number | null; paid?: boolean };
 type Dropoff = { no: number; title: string; dropPct: number; from: number; to: number };
 type Retention = {
   episodes: Episode[];
@@ -32,6 +32,10 @@ type Retention = {
   adjustedRate: number | null;
   grade: string;
   dropoffs: Dropoff[];
+  paidStartNo: number | null;
+  freeRate: number | null;
+  paidRate: number | null;
+  paidPassRate: number | null;
 };
 type Benchmark = {
   genre: string;
@@ -787,21 +791,39 @@ function CsvExport({ data }: { data: Resp }) {
   );
 }
 
+const PAID_COLOR = "#a78bfa"; // 유료 구간 표시색
+
+function rateColor(v: number | null): string {
+  return v === null ? "#8ca0bd" : v >= 80 ? "#34d399" : v >= 60 ? "#5b9bfd" : v >= 50 ? "#fbbf24" : "#f87171";
+}
+
 function RetentionPanel({ r }: { r: Retention }) {
   const rate = r.adjustedRate ?? r.cumulativeRate;
-  const color =
-    rate === null ? "#8ca0bd" : rate >= 80 ? "#34d399" : rate >= 60 ? "#5b9bfd" : rate >= 50 ? "#fbbf24" : "#f87171";
+  const color = rateColor(rate);
   const eps = r.episodes.filter((e): e is Episode & { views: number } => e.views !== null);
 
-  // 회차별 조회수 라인
+  // 유료 전환 경계 (조회수 있는 회차 기준 인덱스)
+  const paidIdx = r.paidStartNo != null ? eps.findIndex((e) => e.paid === true) : -1;
+  const hasPaid = paidIdx > 0;
+
+  // 회차별 조회수 라인 (유료 전환작은 무료/유료 구간을 색으로 분리)
   const W = 720, H = 160, P = 26;
-  let path = "";
+  let path = "", paidPath = "";
+  let boundaryX: number | null = null;
   if (eps.length >= 2) {
     const vals = eps.map((e) => e.views);
     const min = Math.min(...vals), max = Math.max(...vals);
     const x = (i: number) => P + (i / (eps.length - 1)) * (W - 2 * P);
     const y = (v: number) => H - P - ((v - min) / Math.max(max - min, 1)) * (H - 2 * P);
-    path = eps.map((e, i) => `${i === 0 ? "M" : "L"} ${x(i)} ${y(e.views)}`).join(" ");
+    const toPath = (arr: typeof eps, offset: number) =>
+      arr.map((e, i) => `${i === 0 ? "M" : "L"} ${x(offset + i)} ${y(e.views)}`).join(" ");
+    if (hasPaid) {
+      path = toPath(eps.slice(0, paidIdx), 0);
+      paidPath = toPath(eps.slice(paidIdx - 1), paidIdx - 1); // 경계 낙폭 구간부터 유료색
+      boundaryX = x(paidIdx);
+    } else {
+      path = toPath(eps, 0);
+    }
   }
 
   return (
@@ -838,11 +860,65 @@ function RetentionPanel({ r }: { r: Retention }) {
           </p>
         </div>
       </div>
+      {hasPaid && (
+        <div className="mt-3 rounded-lg border p-3" style={{ borderColor: `${PAID_COLOR}66`, background: `${PAID_COLOR}14` }}>
+          <p className="text-xs font-bold" style={{ color: PAID_COLOR }}>
+            💰 유료 전환 감지 — {r.paidStartNo}화부터 유료
+          </p>
+          <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+            <div>
+              <p className="text-[11px] text-muted">무료 구간 연독률</p>
+              <p className="text-lg font-extrabold" style={{ color: rateColor(r.freeRate) }}>
+                {r.freeRate === null ? "-" : `${r.freeRate}%`}
+              </p>
+            </div>
+            <div>
+              <p className="text-[11px] text-muted">전환 통과율</p>
+              <p className="text-lg font-extrabold" style={{ color: PAID_COLOR }}>
+                {r.paidPassRate === null ? "-" : `${r.paidPassRate}%`}
+              </p>
+            </div>
+            <div>
+              <p className="text-[11px] text-muted">유료 구간 연독률</p>
+              <p className="text-lg font-extrabold" style={{ color: rateColor(r.paidRate) }}>
+                {r.paidRate === null ? "-" : `${r.paidRate}%`}
+              </p>
+            </div>
+          </div>
+          <p className="mt-1.5 text-[11px] text-muted">
+            무료 구간은 4화 대비 마지막 무료화, 전환 통과율은 마지막 무료화 대비 유료 첫 화, 유료 구간은 유료 첫 화
+            대비 최신화(최신 3화 제외) 기준입니다. 유료 전환 낙폭은 이탈 의심 구간에서 제외했어요.
+          </p>
+        </div>
+      )}
       {path && (
         <div className="mt-3">
-          <p className="mb-1 text-xs text-muted">회차별 조회수 (1화 → 최신)</p>
+          <p className="mb-1 text-xs text-muted">
+            회차별 조회수 (1화 → 최신)
+            {hasPaid && (
+              <>
+                {" · "}
+                <span style={{ color }}>■ 무료</span> <span style={{ color: PAID_COLOR }}>■ 유료</span>
+              </>
+            )}
+          </p>
           <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
+            {boundaryX !== null && (
+              <>
+                <line x1={boundaryX} y1={6} x2={boundaryX} y2={H - 6} stroke={PAID_COLOR} strokeWidth="1" strokeDasharray="4 3" opacity="0.7" />
+                <text
+                  x={boundaryX + (boundaryX > W / 2 ? -6 : 6)}
+                  y={14}
+                  textAnchor={boundaryX > W / 2 ? "end" : "start"}
+                  fontSize="11"
+                  fill={PAID_COLOR}
+                >
+                  유료 전환 {r.paidStartNo}화
+                </text>
+              </>
+            )}
             <path d={path} fill="none" stroke={color} strokeWidth="2" />
+            {paidPath && <path d={paidPath} fill="none" stroke={PAID_COLOR} strokeWidth="2" />}
           </svg>
         </div>
       )}

@@ -105,6 +105,8 @@ export async function fetchEpisodes(novelId: number, maxPages = 30): Promise<Epi
         const episodeNo = chunk.match(/data-episode-no="(\d+)"/)?.[1];
         if (!episodeNo) return null;
         const bInner = chunk.match(/<b>([\s\S]*?)<\/b>/)?.[1] ?? "";
+        // 배지 class로 무료/유료 판별: b_free=무료, b_plus=PLUS(유료). 배지 없으면 undefined.
+        const paid = /class="b_plus\b/.test(bInner) ? true : /class="b_free\b/.test(bInner) ? false : undefined;
         const title = bInner
           .replace(/<span[^>]*>[\s\S]*?<\/span>/g, "") // 무료/PLUS 등 배지 제거
           .replace(/<[^>]*>/g, "")
@@ -116,9 +118,10 @@ export async function fetchEpisodes(novelId: number, maxPages = 30): Promise<Epi
           episodeNo,
           title,
           date: dateMatch ? `20${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}` : "",
+          paid,
         };
       })
-      .filter((e): e is { episodeNo: string; title: string; date: string } => e !== null);
+      .filter((e): e is { episodeNo: string; title: string; date: string; paid: boolean | undefined } => e !== null);
     if (pageEps.length === 0) break;
 
     // 회차별 조회수 배치 조회 (페이지의 20화 단위)
@@ -141,6 +144,7 @@ export async function fetchEpisodes(novelId: number, maxPages = 30): Promise<Epi
         title: e.title,
         date: e.date,
         views: viewMap.get(e.episodeNo) ?? null,
+        paid: e.paid,
       });
     }
 

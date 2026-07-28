@@ -235,7 +235,7 @@ export async function searchNovels(keyword: string, limit = 20): Promise<SearchH
 
 // ---------- 연독률 (회차별 조회수 기반) ----------
 
-export type Episode = { no: number; title: string; date: string; views: number | null };
+export type Episode = { no: number; title: string; date: string; views: number | null; paid?: boolean };
 
 export type Dropoff = { no: number; title: string; dropPct: number; from: number; to: number };
 
@@ -247,9 +247,13 @@ export type Retention = {
   adjustedRate: number | null; // 보정 연독률 = (최신-3화)/4화 ×100 (커뮤니티 통용 기준)
   grade: string; // 매우 좋음 / 좋음 / 보통 / 주의 / 위험
   dropoffs: Dropoff[]; // 회차별 급락(이탈 의심) 구간
+  paidStartNo: number | null; // 유료 전환 첫 회차 번호 (무료 연재작·완전유료작은 null)
+  freeRate: number | null; // 무료 구간 연독률 = 마지막 무료화 / 4화 ×100
+  paidRate: number | null; // 유료 구간 연독률 = (최신-3화) / 유료 첫화 ×100
+  paidPassRate: number | null; // 전환 통과율 = 유료 첫화 / 마지막 무료화 ×100
 };
 
-type MunpiaChapter = { num?: number; title?: string | number; createdAt?: string; viewCount?: number };
+type MunpiaChapter = { num?: number; title?: string | number; createdAt?: string; viewCount?: number; free?: boolean };
 
 /** 작품의 전체 회차별 조회수 수집 (JSON API 페이지네이션). 1화→최신화 순으로 반환. */
 export async function fetchEpisodes(novelId: number, maxPages = 12): Promise<Episode[]> {
@@ -265,6 +269,7 @@ export async function fetchEpisodes(novelId: number, maxPages = 12): Promise<Epi
         title: String(c.title ?? ""),
         date: (c.createdAt ?? "").slice(0, 10),
         views: typeof c.viewCount === "number" ? c.viewCount : null,
+        paid: typeof c.free === "boolean" ? !c.free : undefined,
       });
     }
     const total = json.result?.total ?? 0;
@@ -293,9 +298,32 @@ export function computeRetention(eps: Episode[]): Retention {
   // 해석 구간도 커뮤니티 통용 눈금(80 상위권 / 60 무난 / 50 방어 / 40 미만 위기)에 맞춘다
   const grade = r >= 80 ? "매우 좋음" : r >= 60 ? "좋음" : r >= 50 ? "보통" : r >= 40 ? "주의" : "위험";
 
+  // 유료 전환 지점: paid가 처음 true가 되는 회차. 1화부터 유료(완전유료작)거나 유료 회차가 없으면 구간 구분 무의미 → null
+  const paidIdx = valid.findIndex((e) => e.paid === true);
+  const hasTransition = paidIdx > 0;
+  const paidStartNo = hasTransition ? valid[paidIdx].no : null;
+
+  let freeRate: number | null = null;
+  let paidRate: number | null = null;
+  let paidPassRate: number | null = null;
+  if (hasTransition) {
+    const lastFree = valid[paidIdx - 1].views;
+    const firstPaid = valid[paidIdx].views;
+    // 무료 구간: 분모는 기존과 동일한 4화, 분자는 마지막 무료화 (무료 구간 8화 미만이면 계산 불가)
+    if (paidIdx >= 8 && e4) freeRate = Math.round((lastFree / e4) * 100);
+    if (lastFree > 0) paidPassRate = Math.round((firstPaid / lastFree) * 100);
+    // 유료 구간: 유료 첫화 대비 (최신-3화) 유지율 (유료 구간 8화 미만이면 계산 불가)
+    const paidLen = valid.length - paidIdx;
+    if (paidLen >= 8 && firstPaid > 0) {
+      paidRate = Math.round((valid[valid.length - 4].views / firstPaid) * 100);
+    }
+  }
+
   // 회차별 급락(이탈 의심): 4화 이후 ~ 최신-3화, 직전 회차 대비 15%+ 하락
+  // 단, 유료 전환 경계 회차는 낙폭이 당연히 크므로 이탈 의심에서 제외 (전환 통과율로 따로 보여줌)
   const dropoffs: Dropoff[] = [];
   for (let i = 3; i < valid.length - 3; i++) {
+    if (hasTransition && i === paidIdx) continue;
     const prev = valid[i - 1].views;
     const cur = valid[i].views;
     if (prev > 0 && cur < prev) {
@@ -313,6 +341,10 @@ export function computeRetention(eps: Episode[]): Retention {
     adjustedRate: adjusted,
     grade,
     dropoffs: dropoffs.slice(0, 3),
+    paidStartNo,
+    freeRate,
+    paidRate,
+    paidPassRate,
   };
 }
 
