@@ -119,6 +119,8 @@ export default function DashboardPage() {
   const [recents, setRecents] = useState<{ id: number; title: string }[]>([]);
 
   const [isPro, setIsPro] = useState(false);
+  // 제목 진단 결과에서 넘어왔는지 — 추적 등록 시 유입 경로로 함께 기록한다
+  const [fromDiagnose, setFromDiagnose] = useState(false);
 
   useEffect(() => {
     try {
@@ -171,9 +173,12 @@ export default function DashboardPage() {
     }
   }
 
-  async function lookup(e: React.FormEvent) {
+  function lookup(e: React.FormEvent) {
     e.preventDefault();
-    const term = q.trim();
+    void runLookup(q.trim());
+  }
+
+  async function runLookup(term: string) {
     if (!term) return;
     // ID(숫자) 또는 플랫폼 URL이면 바로 분석, 아니면 제목 검색 (제목 검색은 문피아·노벨피아만)
     if (
@@ -203,6 +208,24 @@ export default function DashboardPage() {
     }
   }
 
+  // ?q=제목 으로 들어오면 검색창을 채우고 바로 조회한다 (제목 진단 → 작품 추적 연결).
+  // runLookup 선언 뒤에 두어야 초기화 순서가 어긋나지 않는다.
+  useEffect(() => {
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      if (sp.get("from") === "diagnose") setFromDiagnose(true);
+      const preset = sp.get("q")?.trim();
+      if (preset) {
+        setQ(preset);
+        void runLookup(preset);
+      }
+    } catch {
+      /* ignore */
+    }
+    // 최초 진입 시 1회만 — runLookup은 매 렌더 재생성되므로 의존성에 넣지 않는다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function track() {
     if (!data) return;
     setTracking(true);
@@ -214,7 +237,13 @@ export default function DashboardPage() {
       const res = await fetch("/api/novel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ q: String(data.stats.novelId), channel, contact, passCode }),
+        body: JSON.stringify({
+          q: String(data.stats.novelId),
+          channel,
+          contact,
+          passCode,
+          source: fromDiagnose ? "diagnose" : undefined,
+        }),
       });
       const json = await res.json();
       if (res.status === 402) {
@@ -230,8 +259,10 @@ export default function DashboardPage() {
     }
   }
 
+  // w-full: mx-auto(auto 마진)가 flex 자식의 stretch를 무효화해 main이 콘텐츠 폭(fit-content)이
+  // 되면서 모바일에서 페이지 전체가 가로로 넘치던 문제를 막는다. best·compare 페이지도 동일.
   return (
-    <main className="mx-auto max-w-4xl flex-1 px-5 py-10">
+    <main className="mx-auto w-full max-w-4xl flex-1 px-5 py-10">
       <a href="/" className="text-sm text-muted hover:text-foreground">
         ← 노블메트릭
       </a>
@@ -257,7 +288,8 @@ export default function DashboardPage() {
           {loading ? "…" : "검색 / 조회"}
         </button>
       </form>
-      <p className="mt-2 text-xs text-muted">
+      {/* 예시 URL이 길어 모바일에서 가로로 넘치므로 줄바꿈을 허용한다 */}
+      <p className="mt-2 break-words text-xs text-muted">
         제목 검색: 문피아 · 노벨피아 · 카카오페이지 —{" "}
         <b className="text-foreground">네이버시리즈는 제목 검색이 안 돼요.</b> 작품 페이지 URL
         (series.naver.com/novel/detail.series?productNo=…)을 복사해 붙여넣어 주세요.

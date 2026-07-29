@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { diagnose, type DiagnoseInput } from "@/lib/diagnose";
-import { passEnabled, passValidUntil, diagUsed, diagCookie, FREE_DIAG_PER_MONTH } from "@/lib/pass";
+import { logEvent } from "@/lib/db";
+import {
+  passEnabled,
+  passValidUntil,
+  diagUsed,
+  diagCookie,
+  FREE_DIAG_PER_MONTH,
+  PRO_DIAG_PER_MONTH,
+} from "@/lib/pass";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -13,17 +21,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 });
   }
 
-  // 무료 월 3회 → Pro 패스면 무제한. 결제 env 없으면 게이트 꺼짐(전부 무료).
-  let countFree = false;
-  if (passEnabled() && !(await passValidUntil(body.passCode))) {
-    const used = diagUsed(req.headers.get("cookie"));
-    if (used >= FREE_DIAG_PER_MONTH) {
+  // 진단은 호출마다 실시간 AI 비용이 드는 유일한 기능이라 Pro도 상한을 둔다.
+  //   무료 월 3회 / Pro 월 30회. 결제 env 없으면 게이트 꺼짐(전부 무료).
+  let countUsage = false;
+  let isPro = false;
+  if (passEnabled()) {
+    isPro = Boolean(await passValidUntil(body.passCode));
+    const limit = isPro ? PRO_DIAG_PER_MONTH : FREE_DIAG_PER_MONTH;
+    if (diagUsed(req.headers.get("cookie")) >= limit) {
+      await logEvent("diagnose_402", { pro: isPro, limit });
       return NextResponse.json(
-        { error: "PRO_REQUIRED", message: `무료 진단 월 ${FREE_DIAG_PER_MONTH}회를 모두 썼어요. Pro 패스로 무제한 진단할 수 있어요.` },
+        isPro
+          ? {
+              error: "LIMIT_REACHED",
+              message: `이번 달 진단 ${limit}회를 모두 썼어요. 다음 달 1일에 초기화됩니다.`,
+            }
+          : {
+              error: "PRO_REQUIRED",
+              message: `무료 진단 월 ${limit}회를 모두 썼어요. Pro 패스로 월 ${PRO_DIAG_PER_MONTH}회까지 진단할 수 있어요.`,
+            },
         { status: 402 },
       );
     }
-    countFree = true;
+    countUsage = true;
   }
 
   const title = (body.title || "").trim();
@@ -41,8 +61,14 @@ export async function POST(req: NextRequest) {
       genre: body.genre,
       platform: body.platform,
     });
+    await logEvent("diagnose_run", {
+      engine: result.engine,
+      genre: body.genre ?? null,
+      pro: isPro,
+      hasSynopsis: Boolean(body.synopsis?.trim()),
+    });
     const res = NextResponse.json(result);
-    if (countFree) res.headers.set("Set-Cookie", diagCookie(diagUsed(req.headers.get("cookie"))));
+    if (countUsage) res.headers.set("Set-Cookie", diagCookie(diagUsed(req.headers.get("cookie"))));
     return res;
   } catch (e) {
     console.error("[api/diagnose]", e);

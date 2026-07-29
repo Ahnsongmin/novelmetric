@@ -3,7 +3,7 @@ import { fetchBest, computeRetention, type Episode, type RankItem } from "@/lib/
 import { parseQuery, platformOf, fetchNovelAny, fetchEpisodesAny } from "@/lib/platform";
 import { computeBenchmark, computeCadence } from "@/lib/analyze";
 import { retentionBenchmark } from "@/lib/benchmark";
-import { getSnapshots, saveSnapshot, trackNovel, dbEnabled, getRecentPaidBench } from "@/lib/db";
+import { getSnapshots, saveSnapshot, trackNovel, dbEnabled, getRecentPaidBench, logEvent } from "@/lib/db";
 import { passEnabled, passValidUntil, trackedCountByEmail, FREE_TRACK_LIMIT } from "@/lib/pass";
 
 export const runtime = "nodejs";
@@ -48,9 +48,10 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/novel { q, channel?, contact?, passCode? } → 추적 등록 + 첫 스냅샷 적재
+// POST /api/novel { q, channel?, contact?, passCode?, source? } → 추적 등록 + 첫 스냅샷 적재
+//   source: 유입 경로 라벨(계측 전용). "diagnose" = 제목 진단 결과에서 넘어온 등록.
 export async function POST(req: NextRequest) {
-  let body: { q?: string; channel?: string; contact?: string; passCode?: string };
+  let body: { q?: string; channel?: string; contact?: string; passCode?: string; source?: string };
   try {
     body = await req.json();
   } catch {
@@ -66,6 +67,7 @@ export async function POST(req: NextRequest) {
   if (passEnabled() && body.contact && !(await passValidUntil(body.passCode))) {
     const count = await trackedCountByEmail(body.contact, novelId);
     if (count >= FREE_TRACK_LIMIT) {
+      await logEvent("track_402", { platform: platformOf(novelId) });
       return NextResponse.json(
         { error: "PRO_REQUIRED", message: `무료는 ${FREE_TRACK_LIMIT}작품까지 추적할 수 있어요. Pro 패스로 무제한 추적하세요.` },
         { status: 402 },
@@ -78,6 +80,13 @@ export async function POST(req: NextRequest) {
     // 유효한 패스면 추적에 연결 → 주간 성장 리포트(Pro) 대상이 된다
     const validPass = (await passValidUntil(body.passCode)) ? body.passCode : undefined;
     await trackNovel(novelId, { channel, contact: body.contact, passCode: validPass });
+    // tracked_novels는 (novel_id, email) unique upsert라 재등록이 안 남는다 → 시도 자체를 여기 기록
+    await logEvent("track_add", {
+      platform: platformOf(novelId),
+      channel,
+      pro: Boolean(validPass),
+      fromDiagnose: body.source === "diagnose",
+    });
     return NextResponse.json({ ok: true, tracked: dbEnabled(), stats });
   } catch (e) {
     console.error("[api/novel POST]", e);

@@ -83,3 +83,17 @@ alter table public.nm_pass enable row level security;
 -- Phase 3: Pro 주간 리포트 — 추적↔패스 연결 -----------------------------------
 -- Pro 패스로 추적 등록하면 코드를 함께 저장 → 주간 성장 리포트 이메일 대상 판별.
 alter table public.tracked_novels add column if not exists pass_code text;
+
+-- Phase 4: 퍼널 계측 ---------------------------------------------------------
+-- 어떤 기능이 실제로 쓰이는지 판단할 근거. 추적은 tracked_novels로 소급 확인되지만
+-- 제목 진단은 아무 흔적도 남지 않아 비교가 불가능했다(Vercel 로그는 1시간 보존).
+-- 개인정보는 담지 않는다 — 이메일·제목·본문 저장 금지, 집계용 메타만.
+create table if not exists public.nm_events (
+  id bigint generated always as identity primary key,
+  event text not null,   -- diagnose_run | diagnose_402 | track_add | track_402 | pro_view | pro_paid
+  meta jsonb,            -- { engine, genre, platform, channel } 등 집계용 값만
+  created_at timestamptz not null default now()
+);
+create index if not exists nm_events_event_time_idx
+  on public.nm_events (event, created_at desc);
+alter table public.nm_events enable row level security;

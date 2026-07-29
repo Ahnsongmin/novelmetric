@@ -55,7 +55,7 @@ export default async function BestPage({ searchParams }: Props) {
           : { header: "누적 열람수", of: (it: RankItem) => fmt(it.views) };
 
   return (
-    <main className="mx-auto max-w-4xl flex-1 px-5 py-10">
+    <main className="mx-auto w-full max-w-4xl flex-1 px-5 py-10">
       <a href="/" className="text-sm text-muted hover:text-foreground">
         ← 노블메트릭
       </a>

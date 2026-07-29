@@ -4,6 +4,12 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 
+/** 진단 모델. env로 교체 가능 — 비용/품질 비교 후 코드 수정 없이 바꾸기 위함. */
+const DIAGNOSE_MODEL = process.env.DIAGNOSE_MODEL || "claude-sonnet-4-6";
+
+/** 대안 제목 개수. 출력 토큰이 비용의 대부분이라 여기가 곧 단가다. */
+export const TITLE_SUGGESTION_COUNT = 3;
+
 export type DiagnoseInput = {
   title: string;
   synopsis?: string;
@@ -71,10 +77,11 @@ const SYSTEM_RUBRIC = `당신은 한국 웹소설 제목·소개글의 '클릭�
   "summary": "<한 줄 총평, 한국어>",
   "strengths": ["<강점>", ...],
   "weaknesses": ["<구체적 약점과 개선 방향>", ...],
-  "titleSuggestions": [{"title":"<대안 제목>","reason":"<왜 클릭률이 더 높은지>"}, ...5개],
+  "titleSuggestions": [{"title":"<대안 제목>","reason":"<왜 클릭률이 더 높은지 — 한 문장>"}, ...3개],
   "keywords": ["<추천 키워드/태그>", ...]
 }
-점수 기준: S(90+) 즉시 클릭, A(80~89) 강함, B(65~79) 평범+개선여지, C(50~64) 약함, D(<50) 재작성 필요.`;
+점수 기준: S(90+) 즉시 클릭, A(80~89) 강함, B(65~79) 평범+개선여지, C(50~64) 약함, D(<50) 재작성 필요.
+분량: summary 한 문장, strengths·weaknesses 각 3개 이내로 짧게. 장황한 설명 금지.`;
 
 async function diagnoseWithClaude(input: DiagnoseInput): Promise<DiagnoseResult> {
   const client = new Anthropic();
@@ -84,8 +91,10 @@ async function diagnoseWithClaude(input: DiagnoseInput): Promise<DiagnoseResult>
 소개글: ${input.synopsis || "(없음)"}`;
 
   const msg = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 1500,
+    model: DIAGNOSE_MODEL,
+    // 진단 비용의 대부분은 출력 토큰이다(대안 제목+이유가 한국어라 특히 무겁다).
+    // 대안 3개 + 짧은 이유로 스키마를 좁혔으므로 900이면 충분하다.
+    max_tokens: 900,
     system: [
       { type: "text", text: SYSTEM_RUBRIC, cache_control: { type: "ephemeral" } },
     ],
@@ -106,7 +115,7 @@ async function diagnoseWithClaude(input: DiagnoseInput): Promise<DiagnoseResult>
     weaknesses: arr(json.weaknesses),
     titleSuggestions: Array.isArray(json.titleSuggestions)
       ? json.titleSuggestions
-          .slice(0, 5)
+          .slice(0, TITLE_SUGGESTION_COUNT)
           .map((s: { title?: unknown; reason?: unknown }) => ({
             title: String(s.title ?? ""),
             reason: String(s.reason ?? ""),
@@ -169,7 +178,7 @@ function diagnoseHeuristic(input: DiagnoseInput): DiagnoseResult {
           { title: `${base}${hasBatchim ? "을" : "를"} 주웠다`, reason: "‘줍줍’ 사이다 클리셰로 가벼운 진입장벽" },
         ]
       : []),
-  ];
+  ].slice(0, TITLE_SUGGESTION_COUNT);
 
   const keywords = dedupe([
     input.genre || "현대판타지",

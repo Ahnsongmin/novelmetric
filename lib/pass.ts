@@ -1,6 +1,6 @@
 // Pro 패스(30일 이용권) + 무료 사용량 게이트.
 //   무료: 제목진단 월 3회(서명 쿠키), 작품 추적 이메일당 1작품
-//   Pro: 결제 → NM-코드 발급(nm_pass) → 30일 무제한
+//   Pro: 결제 → NM-코드 발급(nm_pass) → 30일간 추적 무제한 + 진단 월 30회
 // 토스 키 또는 DB가 없으면 게이트 자체가 꺼져 전부 무료(기존 동작).
 
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
@@ -8,6 +8,9 @@ import { getDb, dbEnabled } from "./db";
 
 export const PASS = { amount: 9900, days: 30, name: "노블메트릭 Pro 30일 패스" };
 export const FREE_DIAG_PER_MONTH = 3;
+// 진단만 Pro에도 상한이 있다 — 호출마다 실시간 AI 비용이 드는 유일한 기능이라,
+// 무제한이면 헤비 유저 한 명이 패스 값을 넘겨 쓸 수 있다. 추적·대시보드는 무제한.
+export const PRO_DIAG_PER_MONTH = 30;
 export const FREE_TRACK_LIMIT = 1;
 export const DIAG_COOKIE = "nm_diag";
 

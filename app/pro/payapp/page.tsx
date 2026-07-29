@@ -59,7 +59,7 @@ function PayappResult() {
           <p className="mb-2 text-3xl">🎫</p>
           <h1 className="mb-1 text-lg font-bold">Pro 패스가 켜졌어요</h1>
           <p className="mb-4 text-sm text-muted">
-            {expiresAt && `${new Date(expiresAt).toLocaleDateString("ko-KR")}까지 모든 기능 무제한.`} 이 브라우저에 자동
+            {expiresAt && `${new Date(expiresAt).toLocaleDateString("ko-KR")}까지 Pro 기능이 열립니다.`} 이 브라우저에 자동
             저장됐고, 다른 기기에서는 아래 코드를 입력하면 돼요.
           </p>
           <p className="mb-6 rounded-lg bg-background/60 py-3 font-mono text-lg font-bold tracking-wider">{code}</p>

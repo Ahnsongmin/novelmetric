@@ -113,20 +113,29 @@ function Hero() {
           <span className="h-1.5 w-1.5 rounded-full bg-accent-2" />
           웹소설 작가를 위한 노출·성장 분석
         </p>
-        <h1 className="text-balance text-3xl font-extrabold leading-tight tracking-tight md:text-5xl">
+        <h1 className="text-balance break-keep text-3xl font-extrabold leading-tight tracking-tight md:text-5xl">
           썼는데 <span className="text-accent-2">왜 안 뜨지?</span>
           <br />
-          제목부터 데이터로 점검하세요.
+          매일 데이터로 확인하세요.
         </h1>
-        <p className="mx-auto mt-4 max-w-xl text-pretty text-muted md:text-lg">
-          독자는 0.5초 만에 제목으로 클릭을 결정합니다. 내 제목·소개글의
-          <b className="text-foreground"> 클릭률(후킹) 점수</b>를 무료로 진단하고,
-          더 잘 팔리는 제목 5개를 받아보세요.
+        <p className="mx-auto mt-4 max-w-xl text-pretty break-keep text-muted md:text-lg">
+          문피아·노벨피아·네이버시리즈·카카오페이지 작품을{" "}
+          <b className="text-foreground">매일 새벽 자동 집계</b>해 선작·조회수·연독률 변화를
+          알려드립니다. 먼저, 제목이 문제인지 30초 만에 확인해 보세요.
         </p>
       </div>
       <div className="mt-10">
+        <p className="mb-3 text-center text-xs font-semibold text-muted">
+          <span className="text-accent-2">1단계</span> · 제목 클릭률 무료 진단 (가입 없이 즉시)
+        </p>
         <DiagnoseTool />
       </div>
+      <p className="mt-5 text-center text-sm text-muted">
+        이미 연재 중이라면{" "}
+        <a href="/dashboard" className="font-bold text-accent underline underline-offset-2">
+          작품 추적부터 시작하기 →
+        </a>
+      </p>
     </section>
   );
 }
@@ -163,8 +172,9 @@ function DiagnoseTool() {
       });
       const data = await res.json();
       if (res.status === 402) {
-        setProRequired(true);
-        setError(data.message || "무료 진단 횟수를 모두 썼어요.");
+        // 무료 한도 소진일 때만 Pro 안내 — Pro 사용자가 월 상한에 닿은 경우엔 링크가 무의미하다
+        setProRequired(data.error === "PRO_REQUIRED");
+        setError(data.message || "이번 달 진단 횟수를 모두 썼어요.");
         return;
       }
       if (!res.ok) throw new Error(data.error || "진단 실패");
@@ -340,6 +350,8 @@ function ResultView({ result, title }: { result: DiagnoseResult; title: string }
 
       <ShareButtons title={title} result={result} />
 
+      <TrackCta title={title} />
+
       <ResultEmailCapture />
 
       <p className="pt-1 text-center text-[11px] text-muted">
@@ -349,7 +361,31 @@ function ResultView({ result, title }: { result: DiagnoseResult; title: string }
   );
 }
 
-// 진단 결과(만족도 최고 순간)에 바로 붙는 이메일 캡처 — 매주 제목 트렌드 리포트.
+// 진단 결과 → 작품 추적으로 넘기는 1순위 전환 지점.
+// 진단은 제목을 한 번 고치면 끝이지만, 추적은 매일 새벽 갱신돼 다시 올 이유가 생긴다.
+// 제목을 쿼리로 넘겨 대시보드에서 바로 검색되게 한다(from=diagnose는 유입 경로 계측용).
+function TrackCta({ title }: { title: string }) {
+  const t = title.trim();
+  const href = `/dashboard?from=diagnose${t ? `&q=${encodeURIComponent(t)}` : ""}`;
+  return (
+    <div className="rounded-xl border border-accent/40 bg-accent/5 p-4">
+      <p className="break-keep text-sm font-bold">📈 이 작품, 매일 자동으로 추적해 드릴까요?</p>
+      <p className="mt-0.5 break-keep text-xs text-muted">
+        선작·조회수·연독률을 <b className="text-foreground">매일 새벽 자동 집계</b>하고, 급증하거나
+        이정표를 넘으면 이메일로 알려드려요. 문피아·노벨피아·네이버시리즈·카카오페이지 지원.
+      </p>
+      <a
+        href={href}
+        className="mt-3 block rounded-lg bg-gradient-to-r from-accent to-accent-2 py-2.5 text-center text-sm font-bold text-background transition hover:opacity-90"
+      >
+        이 작품 추적 시작하기 →
+      </a>
+      <p className="mt-1.5 text-center text-[11px] text-muted">무료로 1작품 · 가입 없이 시작</p>
+    </div>
+  );
+}
+
+// 추적까지는 아직인 사람을 위한 2순위 전환 — 매주 제목 트렌드 리포트.
 // waitlist 테이블에 source:"diagnose"로 저장해 어느 지점이 전환됐는지 구분한다.
 function ResultEmailCapture() {
   const [email, setEmail] = useState("");
@@ -499,19 +535,19 @@ function Section({ title, items, accent }: { title: string; items: string[]; acc
 function ValueProps() {
   const items = [
     {
-      icon: "🎯",
-      title: "집필 툴이 아닙니다",
-      desc: "노벨라·펜시브가 '쓰기'를 돕는다면, 노블메트릭은 '쓴 다음'을 돕습니다. 노출·순위·성장 전담.",
+      icon: "📈",
+      title: "매일 새벽 자동 추적",
+      desc: "작품을 한 번 등록해 두면 선작·조회수·추천이 매일 자동으로 쌓입니다. 급증하거나 이정표를 넘으면 이메일 알림.",
     },
     {
-      icon: "📈",
-      title: "연독률·투베·선작을 한눈에",
-      desc: "작가가 손으로 계산하던 연독률을 자동으로. 선작 게이지로 투베 진입 적기까지 — /dashboard에서.",
+      icon: "🎯",
+      title: "연독률·투베 진입 시점",
+      desc: "작가가 손으로 계산하던 연독률을 자동으로. 선작 게이지로 투베 진입 적기까지 한눈에.",
     },
     {
       icon: "⚡",
-      title: "작가의 시간을 아낌",
-      desc: "플랫폼마다 흩어진 지표를 매일 자동 수집. 주간 리포트로 핵심만.",
+      title: "집필 툴이 아닙니다",
+      desc: "노벨라·펜시브가 '쓰기'를 돕는다면, 노블메트릭은 '쓴 다음'을 돕습니다. 노출·순위·성장 전담.",
     },
   ];
   return (
@@ -583,11 +619,11 @@ function FAQ() {
     },
     {
       q: "어떤 플랫폼을 지원하나요?",
-      a: "문피아·노벨피아 공개 데이터를 지원합니다. 작품 URL이나 작품 ID만 넣으면 됩니다. (기타 플랫폼은 순차 확장 예정)",
+      a: "문피아·노벨피아·네이버시리즈·카카오페이지 공개 데이터를 지원합니다. 작품 URL이나 작품 ID만 넣으면 됩니다. 제목 검색은 문피아·노벨피아만 가능하고, 네이버시리즈·카카오페이지는 작품 URL을 붙여넣어 주세요. 연독률은 회차별 조회수가 공개된 문피아·노벨피아에서 계산됩니다.",
     },
     {
       q: "무료인가요?",
-      a: "제목 진단과 작품 지표·연독률 조회는 무료로 써볼 수 있습니다. 매일 자동 추적·알림 등은 추후 Pro로 제공될 예정입니다.",
+      a: "작품 1개 추적(매일 자동 수집 + 급변·이정표 이메일 알림), 연독률·투베 게이지 분석, 제목 진단 월 3회까지 무료입니다. Pro(9,900원/30일, 자동결제 없음)는 추적 작품 무제한, 경쟁작 주간 비교 메일, 장르 벤치마크, 심화 추이 분석을 더해 줍니다.",
     },
   ];
   return (
@@ -613,14 +649,14 @@ function Roadmap() {
     {
       tag: "지금",
       on: true,
-      title: "제목·소개글 클릭률 진단",
-      desc: "AI가 후킹 점수와 대안 제목을 제시 (무료 체험 중)",
+      title: "순위·조회수 추적 대시보드",
+      desc: "문피아·노벨피아·네이버시리즈·카카오페이지 작품 지표 조회 + 추적 등록 (매일 새벽 자동 수집) — /dashboard",
     },
     {
       tag: "지금",
       on: true,
-      title: "순위·조회수 추적 대시보드",
-      desc: "문피아·노벨피아·네이버시리즈·카카오페이지 작품 지표 조회 + 추적 등록 (매일 자동 수집) — /dashboard",
+      title: "제목·소개글 클릭률 진단",
+      desc: "AI가 후킹 점수와 대안 제목을 제시 (무료 월 3회)",
     },
     {
       tag: "지금",
@@ -670,16 +706,16 @@ function FinalCta() {
       <div className="rounded-3xl border border-border bg-gradient-to-br from-card to-card/30 p-8 text-center md:p-10">
         <h2 className="text-2xl font-bold md:text-3xl">지금 바로 시작하세요</h2>
         <p className="mx-auto mt-2 max-w-md text-muted">
-          가입 없이 제목 진단과 연독률·투베 분석을 무료로 쓸 수 있어요.
+          가입 없이 작품 1개 추적과 연독률·투베 분석을 무료로 쓸 수 있어요.
           <br />
-          제목 무제한 진단·작품 무제한 추적이 필요하면 <b className="text-foreground">Pro</b>로 열립니다.
+          여러 작품을 추적하고 경쟁작과 나란히 비교하려면 <b className="text-foreground">Pro</b>로 열립니다.
         </p>
         <div className="mx-auto mt-6 flex max-w-md flex-col justify-center gap-2 sm:flex-row">
           <a
             href="/dashboard"
             className="rounded-lg bg-gradient-to-r from-accent to-accent-2 px-6 py-3 font-bold text-background transition hover:opacity-90"
           >
-            무료로 분석 시작
+            무료로 작품 추적 시작
           </a>
           <a
             href="/pro"

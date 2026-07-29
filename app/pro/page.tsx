@@ -27,20 +27,20 @@ function storedPass(): string | null {
 }
 
 const FREE_FEATURES = [
-  "제목 진단 월 3회",
-  "작품 추적 1개",
+  "작품 추적 1개 — 매일 새벽 자동 수집",
   "연독률·이탈 분석 · CSV",
-  "베스트 분석 열람",
-  "지표 급변 알림 (이메일 등록 시)",
+  "지표 급변·이정표 알림 (이메일 등록 시)",
+  "베스트 분석 · 트렌드 리포트 열람",
+  "제목 진단 월 3회",
 ];
 const PRO_FEATURES = [
-  "제목 진단 무제한",
   "작품 추적 무제한 — 경쟁작도 나란히 추적",
   "경쟁작 워치 — 추적 작품끼리 주간 성적 비교표 메일 (누가 얼마나 앞섰는지)",
   "장르 벤치마크 — 장르 상위권 연독률·성장 속도 대비 내 위치",
   "심화 추이 분석 — 일별 증감표·성장 속도·이정표 예상",
   "이탈 경보 — 새 회차에서 이탈 감지되면 다음날 아침 메일",
   "주간 성장 리포트 이메일 (매주 월요일)",
+  "제목 진단 월 30회",
 ];
 
 function ProContent() {
@@ -54,7 +54,10 @@ function ProContent() {
 
   useEffect(() => {
     const code = storedPass();
-    fetch(`/api/gate${code ? `?code=${encodeURIComponent(code)}` : ""}`)
+    // from=pro → 판매 페이지 조회를 퍼널 이벤트로 기록(대시보드에서 오는 gate 호출과 구분)
+    const qs = new URLSearchParams({ from: "pro" });
+    if (code) qs.set("code", code);
+    fetch(`/api/gate?${qs.toString()}`)
       .then((r) => r.json())
       .then((g: Gate) => {
         setGate(g);

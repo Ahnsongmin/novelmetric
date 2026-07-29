@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { payappEnabled, verifyOrderSig, passByOrderId } from "@/lib/payapp";
 import { createPass, PASS } from "@/lib/pass";
+import { logEvent } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest) {
   try {
     const pass = await createPass({ orderId, paymentKey: `payapp-${mulNo}`, amount: price });
     console.log(`[payapp/feedback] 발급 완료 order=${orderId} code=${pass.code}`);
+    await logEvent("pro_paid", { via: "payapp", amount: price });
     return ok();
   } catch (e) {
     // 동시 웹훅으로 unique 충돌이 났다면 이미 발급된 것 — 성공 처리

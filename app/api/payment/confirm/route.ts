@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { PASS, passEnabled, createPass } from "@/lib/pass";
+import { logEvent } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -33,6 +34,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const pass = await createPass({ orderId, paymentKey, amount });
+    await logEvent("pro_paid", { via: "toss", amount });
     return NextResponse.json(pass);
   } catch (e) {
     console.error("[payment/confirm]", e);

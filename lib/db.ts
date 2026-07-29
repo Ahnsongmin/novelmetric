@@ -21,6 +21,22 @@ export function dbEnabled(): boolean {
   return getDb() !== null;
 }
 
+/**
+ * 퍼널 이벤트 1건 기록 (nm_events).
+ * 어떤 기능이 실제로 쓰이는지 비교할 근거 — 개인정보는 담지 않는다(집계용 메타만).
+ * DB 없으면 no-op이고, 적재에 실패해도 절대 호출한 요청을 깨뜨리지 않는다.
+ */
+export async function logEvent(event: string, meta?: Record<string, unknown>): Promise<void> {
+  const db = getDb();
+  if (!db) return;
+  try {
+    const { error } = await db.from("nm_events").insert({ event, meta: meta ?? null });
+    if (error) console.error("[logEvent]", event, error.message);
+  } catch (e) {
+    console.error("[logEvent]", event, e);
+  }
+}
+
 export type Snapshot = {
   episodes: number | null;
   views: number | null;
