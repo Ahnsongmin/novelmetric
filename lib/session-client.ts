@@ -18,26 +18,18 @@ export function savePassCode(code: string): void {
   localStorage.setItem(PASS_KEY, JSON.stringify({ code }));
 }
 
-export type ProviderId = "google" | "kakao" | "naver";
+/** 로그인 수단은 이메일 + 비밀번호 하나뿐이다(소셜 로그인은 쓰지 않는다 — 2026-07-30 사용자 결정). */
 export type Me = {
   enabled: boolean;
   email: string | null;
-  providers: ProviderId[];
-};
-
-export const PROVIDER_LABEL: Record<ProviderId, string> = {
-  google: "Google로 계속하기",
-  kakao: "카카오로 계속하기",
-  naver: "네이버로 계속하기",
 };
 
 export async function fetchMe(): Promise<Me> {
   try {
     const res = await fetch("/api/auth/me");
-    const data = (await res.json()) as Me;
-    return { ...data, providers: data.providers ?? [] };
+    return (await res.json()) as Me;
   } catch {
-    return { enabled: false, email: null, providers: [] };
+    return { enabled: false, email: null };
   }
 }
 

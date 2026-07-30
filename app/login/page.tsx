@@ -7,14 +7,9 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import LoginGate from "@/components/LoginGate";
 
+// 지금 /login으로 오는 오류는 하나뿐이다 — 비밀번호 찾기 메일 링크가 만료·재사용된 경우
+// (`/api/auth/callback`). 비밀번호 로그인 오류는 카드 안에서 바로 표시된다.
 const ERRORS: Record<string, string> = {
-  provider: "지금은 그 방식으로 로그인할 수 없어요. 다른 방법을 써주세요.",
-  cancelled: "로그인이 취소됐어요.",
-  state: "로그인 요청이 만료됐어요. 다시 시도해 주세요.",
-  code: "로그인 응답이 올바르지 않아요. 다시 시도해 주세요.",
-  exchange: "로그인 처리 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.",
-  unverified: "이메일이 인증되지 않은 계정이에요. 다른 방법으로 가입해 주세요.",
-  server: "서버 오류가 발생했어요. 잠시 후 다시 시도해 주세요.",
   expired: "로그인 링크가 만료됐거나 이미 사용됐어요. 다시 받아주세요.",
 };
 
@@ -22,7 +17,7 @@ function LoginContent() {
   const sp = useSearchParams();
   const nextParam = sp.get("next");
   const next = nextParam && nextParam.startsWith("/") ? nextParam : "/dashboard";
-  const error = ERRORS[sp.get("error") ?? sp.get("login") ?? ""];
+  const error = ERRORS[sp.get("error") ?? ""];
   // 가입 유도로 들어온 링크(?mode=signup)만 가입 탭으로 시작한다. 기본은 로그인.
   const defaultMode = sp.get("mode") === "signup" ? "signup" : "login";
 

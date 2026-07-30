@@ -5,9 +5,10 @@
 //
 // 서버가 401 LOGIN_REQUIRED를 돌려준 자리에 그대로 끼워 넣거나 /login 페이지에서 단독으로 쓴다.
 // "비밀번호 찾기"는 메일 링크(1회용 토큰)로 처리한다 — 비밀번호를 잊어도 계정에 다시 들어올 수 있다.
+//
+// 수단은 이메일 + 비밀번호 하나뿐이다. 소셜 로그인은 쓰지 않는다(2026-07-30 사용자 결정).
 
 import { useEffect, useState } from "react";
-import { fetchMe, PROVIDER_LABEL, type ProviderId } from "@/lib/session-client";
 
 type Mode = "login" | "signup";
 
@@ -29,7 +30,6 @@ export default function LoginGate({
   defaultMode?: Mode;
   onSuccess?: () => void;
 }) {
-  const [providers, setProviders] = useState<ProviderId[]>([]);
   const [mode, setMode] = useState<Mode>(defaultMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -44,7 +44,6 @@ export default function LoginGate({
       setEmail(saved);
       setSaveEmail(true);
     }
-    fetchMe().then((m) => setProviders(m.providers));
   }, []);
 
   async function submit(e: React.FormEvent) {
@@ -199,27 +198,6 @@ export default function LoginGate({
           </>
         )}
       </button>
-
-      {providers.length > 0 && (
-        <>
-          <div className="my-3 flex items-center gap-3 text-xs text-muted">
-            <span className="h-px flex-1 bg-border" />
-            또는
-            <span className="h-px flex-1 bg-border" />
-          </div>
-          <div className="space-y-2">
-            {providers.map((p) => (
-              <a
-                key={p}
-                href={`/api/auth/oauth/${p}?next=${encodeURIComponent(next)}`}
-                className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-card/60 py-2.5 text-sm font-semibold transition hover:border-accent"
-              >
-                {PROVIDER_LABEL[p]}
-              </a>
-            ))}
-          </div>
-        </>
-      )}
     </div>
   );
 }
