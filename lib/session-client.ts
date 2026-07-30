@@ -23,8 +23,6 @@ export type Me = {
   enabled: boolean;
   email: string | null;
   providers: ProviderId[];
-  /** 비밀번호 로그인을 쓸 수 있는지(DB에 컬럼이 준비됐는지) */
-  password: boolean;
 };
 
 export const PROVIDER_LABEL: Record<ProviderId, string> = {
@@ -37,9 +35,9 @@ export async function fetchMe(): Promise<Me> {
   try {
     const res = await fetch("/api/auth/me");
     const data = (await res.json()) as Me;
-    return { ...data, providers: data.providers ?? [], password: Boolean(data.password) };
+    return { ...data, providers: data.providers ?? [] };
   } catch {
-    return { enabled: false, email: null, providers: [], password: false };
+    return { enabled: false, email: null, providers: [] };
   }
 }
 

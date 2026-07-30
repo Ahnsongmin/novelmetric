@@ -172,19 +172,6 @@ export async function findOrCreateUser(
   return { user: created.data as User, isNew: true };
 }
 
-// password_hash 컬럼이 아직 없는 DB에서도 앱이 깨지지 않게 한다 — 컬럼이 생기면 자동으로
-// 비밀번호 로그인이 노출된다(키가 있으면 켜지는 다른 기능들과 같은 방식).
-let passwordColumnReady: boolean | undefined;
-
-export async function passwordLoginAvailable(): Promise<boolean> {
-  if (passwordColumnReady === true) return true; // 한 번 확인되면 다시 묻지 않는다
-  const db = getDb();
-  if (!db) return false;
-  const { error } = await db.from("nm_users").select("password_hash").limit(1);
-  if (!error) passwordColumnReady = true;
-  return !error;
-}
-
 export async function getPasswordHash(userId: string): Promise<string | null> {
   const db = getDb();
   if (!db) return null;
