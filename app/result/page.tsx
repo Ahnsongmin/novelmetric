@@ -41,7 +41,8 @@ export default function ResultPage() {
             </span>
           </div>
           <p className="text-sm text-muted">
-            당신의 웹소설 제목은 몇 점일까요? 후킹 점수 + 대안 제목 5개를 무료로 받아보세요.
+            당신의 웹소설 제목은 몇 점일까요? 후킹 점수 + 대안 제목 3개를 받아보세요. 무료
+            회원가입 후 매달 1회 무료입니다.
           </p>
           <a
             href="/#top"

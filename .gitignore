@@ -49,6 +49,9 @@ next-env.d.ts
 # 브라우저 세션 산출물
 /.playwright-mcp/
 /*-analytics.png
+/*.png
+# 아카 자동화용 크롬 프로필(쿠키·로그인 흔적) — 커밋 금지
+/scripts/.arca-profile/
 
 scripts/.manager-reply-state.json
 

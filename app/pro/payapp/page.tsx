@@ -4,6 +4,7 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { savePassCode } from "@/lib/session-client";
 
 const POLL_MS = 2500;
 const MAX_POLLS = 40; // 최대 100초 대기 후 안내 전환
@@ -24,7 +25,9 @@ function PayappResult() {
       try {
         const j = await fetch(`/api/payapp/code?order=${encodeURIComponent(order)}`).then((r) => r.json());
         if (j.code) {
-          localStorage.setItem("nm_pass", JSON.stringify({ code: j.code }));
+          savePassCode(j.code);
+          // 로그인 상태면 이 호출로 패스가 계정에 귀속된다(기기를 바꿔도 따라오게).
+          void fetch(`/api/gate?code=${encodeURIComponent(j.code)}`);
           setCode(j.code);
           setExpiresAt(j.expiresAt ?? "");
           setState("done");

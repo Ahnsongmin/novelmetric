@@ -86,28 +86,48 @@ export async function getSnapshots(novelId: number, limit = 90): Promise<Snapsho
   return ((data as Snapshot[]) ?? []).reverse();
 }
 
-export type TrackOptions = { email?: string; channel?: string; contact?: string; passCode?: string };
+export type TrackOptions = {
+  userId?: string | null;
+  anonId?: string | null;
+  channel?: string;
+  contact?: string;
+  passCode?: string;
+};
 
 /** 작품 추적 등록 (+ 알림 채널/연락처, Pro면 패스 코드 연결).
- *  알림·pass_code 컬럼이 아직 없는 DB에서도 추적은 되도록 폴백한다. */
+ *
+ *  소유자(user_id 또는 anon_id) 기준으로 기존 행을 찾아 갱신한다. upsert의 onConflict를 쓰지
+ *  않는 이유는 소유자 유니크 인덱스가 partial(NULL 제외)이라 PostgREST가 추론하지 못하기 때문.
+ *  레거시 email 컬럼에는 더 이상 쓰지 않는다 — 옛 unique(novel_id,email)과 충돌하지 않게 하고,
+ *  연락처는 contact 한 곳에만 둔다. */
 export async function trackNovel(novelId: number, opts: TrackOptions = {}): Promise<void> {
   const db = getDb();
   if (!db) return;
-  const email = opts.email ?? opts.contact ?? null;
-  const { error } = await db.from("tracked_novels").upsert(
-    {
-      novel_id: novelId,
-      email,
-      notify_channel: opts.channel ?? "none",
-      contact: opts.contact ?? opts.email ?? null,
-      ...(opts.passCode ? { pass_code: opts.passCode } : {}),
-    },
-    { onConflict: "novel_id,email" }
-  );
-  if (error) {
-    // notify_channel/contact/pass_code 컬럼이 없는 구버전 스키마 → 기본 필드만 저장
-    await db.from("tracked_novels").upsert({ novel_id: novelId, email }, { onConflict: "novel_id,email" });
+  const fields = {
+    notify_channel: opts.channel ?? "none",
+    contact: opts.contact ?? null,
+    ...(opts.passCode ? { pass_code: opts.passCode } : {}),
+  };
+  const ownerCol = opts.userId ? "user_id" : opts.anonId ? "anon_id" : null;
+  const ownerVal = opts.userId ?? opts.anonId ?? null;
+
+  if (!ownerCol || !ownerVal) {
+    const { error } = await db.from("tracked_novels").insert({ novel_id: novelId, ...fields });
+    if (error) console.error("[trackNovel]", error.message);
+    return;
   }
+
+  const { data: existing } = await db
+    .from("tracked_novels")
+    .select("id")
+    .eq("novel_id", novelId)
+    .eq(ownerCol, ownerVal)
+    .maybeSingle();
+
+  const { error } = existing
+    ? await db.from("tracked_novels").update(fields).eq("id", (existing as { id: number }).id)
+    : await db.from("tracked_novels").insert({ novel_id: novelId, [ownerCol]: ownerVal, ...fields });
+  if (error) console.error("[trackNovel]", error.message);
 }
 
 /** 추적 중인 모든 작품 ID (중복 제거) */
@@ -199,29 +219,32 @@ export async function listNotifyPrefs(): Promise<TrackedPref[]> {
   return (data as TrackedPref[]) ?? [];
 }
 
-export type WeeklyTarget = { novel_id: number; contact: string; pass_code: string };
+export type WeeklyTarget = { novel_id: number; contact: string; pass_code: string | null };
 
-/** Pro 주간 리포트 대상: 이메일 연락처 + 유효한 패스가 연결된 추적들.
- *  pass_code 컬럼이 없는 구버전 스키마면 빈 배열(리포트 미발송)로 폴백. */
+/** Pro 주간 리포트 대상: 이메일 연락처 + 유효한 패스가 붙은 추적들.
+ *  패스는 두 경로로 연결된다 — 등록 시 함께 저장된 pass_code(구방식), 또는 계정에 귀속된 패스.
+ *  계정 경로가 있어야 기기를 바꾸거나 코드를 잃어버려도 리포트가 끊기지 않는다. */
 export async function listWeeklyTargets(): Promise<WeeklyTarget[]> {
   const db = getDb();
   if (!db) return [];
   const { data, error } = await db
     .from("tracked_novels")
-    .select("novel_id,contact,pass_code")
+    .select("novel_id,contact,pass_code,user_id")
     .eq("notify_channel", "email")
-    .not("pass_code", "is", null)
     .not("contact", "is", null);
   if (error || !data) return [];
-  const rows = data as WeeklyTarget[];
+  const rows = data as (WeeklyTarget & { user_id: string | null })[];
   if (!rows.length) return [];
-  // 유효(미만료) 패스만
-  const codes = [...new Set(rows.map((r) => r.pass_code))];
+
   const { data: passes } = await db
     .from("nm_pass")
-    .select("code,expires_at")
-    .in("code", codes)
+    .select("code,user_id")
     .gt("expires_at", new Date().toISOString());
-  const valid = new Set(((passes as { code: string }[]) ?? []).map((p) => p.code));
-  return rows.filter((r) => valid.has(r.pass_code));
+  const active = (passes as { code: string; user_id: string | null }[]) ?? [];
+  const validCodes = new Set(active.map((p) => p.code));
+  const proUsers = new Set(active.map((p) => p.user_id).filter(Boolean) as string[]);
+
+  return rows.filter(
+    (r) => (r.pass_code && validCodes.has(r.pass_code)) || (r.user_id && proUsers.has(r.user_id)),
+  );
 }

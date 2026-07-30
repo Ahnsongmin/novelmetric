@@ -1,15 +1,20 @@
-// 아카라이브 웹소설 연재 채널 데이터 글(177401493) 반응 추적 스크립트.
-//   글 페이지에서 조회수·댓글수·댓글 내용을 파싱해 scripts/arca-post-metrics.json에 누적 기록.
+// 아카라이브 웹소설 연재 채널 글 반응 추적 스크립트.
+//   글 페이지에서 조회수·댓글수·댓글 내용을 파싱해 scripts/arca-post-metrics-<글ID>.json에 누적 기록.
 //   새 댓글은 newComments 배열로 출력 (id·작성자·본문) — 답글 판단은 호출자가 함.
+//   사용법: node scripts/track-arca-post.mjs [--post 글ID]   (기본: 178096419 = 7/27 출시 글)
+//   ※ 구버전 데이터 글(177401493) 기록은 arca-post-metrics.json / arca-comment-state.json에 그대로 남아 있음.
 
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const POST_URL = "https://arca.live/b/webfiction/177401493";
-const metricsPath = join(here, "arca-post-metrics.json");
-const commentStatePath = join(here, "arca-comment-state.json");
+const argv = process.argv.slice(2);
+const postIdx = argv.indexOf("--post");
+const POST_ID = postIdx >= 0 ? argv[postIdx + 1] : "178096419";
+const POST_URL = `https://arca.live/b/webfiction/${POST_ID}`;
+const metricsPath = join(here, `arca-post-metrics-${POST_ID}.json`);
+const commentStatePath = join(here, `arca-comment-state-${POST_ID}.json`);
 
 const UA = {
   "User-Agent":

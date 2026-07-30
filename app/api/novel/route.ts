@@ -4,7 +4,8 @@ import { parseQuery, platformOf, fetchNovelAny, fetchEpisodesAny } from "@/lib/p
 import { computeBenchmark, computeCadence } from "@/lib/analyze";
 import { retentionBenchmark } from "@/lib/benchmark";
 import { getSnapshots, saveSnapshot, trackNovel, dbEnabled, getRecentPaidBench, logEvent } from "@/lib/db";
-import { passEnabled, passValidUntil, trackedCountByEmail, FREE_TRACK_LIMIT } from "@/lib/pass";
+import { activePassFor, passValidUntil, trackedCountByOwner, FREE_TRACK_LIMIT } from "@/lib/pass";
+import { anonCookie, authEnabled, currentUser, newAnonId, readAnon } from "@/lib/auth";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -50,6 +51,10 @@ export async function GET(req: NextRequest) {
 
 // POST /api/novel { q, channel?, contact?, passCode?, source? } → 추적 등록 + 첫 스냅샷 적재
 //   source: 유입 경로 라벨(계측 전용). "diagnose" = 제목 진단 결과에서 넘어온 등록.
+//
+// 게이트: 추적 자체는 가입 없이 1작품까지 된다. 알림 채널(이메일·카톡)을 켜는 순간부터
+// 계정이 필요하다 — 알림을 보낼 주소가 곧 신원이고, 예전엔 알림을 끄면 한도 검사가
+// 통째로 스킵돼 무제한 등록이 가능했다.
 export async function POST(req: NextRequest) {
   let body: { q?: string; channel?: string; contact?: string; passCode?: string; source?: string };
   try {
@@ -63,33 +68,78 @@ export async function POST(req: NextRequest) {
   }
   const channel = ["email", "kakao"].includes(body.channel || "") ? body.channel : "none";
 
-  // 무료는 이메일당 1작품 추적 — Pro 패스면 무제한. 결제 env 없으면 제한 없음.
-  if (passEnabled() && body.contact && !(await passValidUntil(body.passCode))) {
-    const count = await trackedCountByEmail(body.contact, novelId);
-    if (count >= FREE_TRACK_LIMIT) {
-      await logEvent("track_402", { platform: platformOf(novelId) });
+  const gated = authEnabled();
+  const user = gated ? await currentUser(req) : null;
+  let anonId: string | null = null;
+  let freshAnonCookie: string | null = null;
+
+  if (gated && !user) {
+    if (channel !== "none" || body.contact) {
+      await logEvent("track_401", { platform: platformOf(novelId), channel });
       return NextResponse.json(
-        { error: "PRO_REQUIRED", message: `무료는 ${FREE_TRACK_LIMIT}작품까지 추적할 수 있어요. Pro 패스로 무제한 추적하세요.` },
-        { status: 402 },
+        {
+          error: "LOGIN_REQUIRED",
+          message: "알림을 받으려면 무료 회원가입이 필요해요. 이메일만 넣으면 됩니다.",
+        },
+        { status: 401 },
+      );
+    }
+    anonId = readAnon(req.headers.get("cookie"));
+    if (!anonId) {
+      anonId = newAnonId();
+      freshAnonCookie = anonCookie(anonId);
+    }
+  }
+
+  // 무료는 소유자당 1작품 — Pro 패스면 무제한. DB 없는 환경에서는 게이트가 꺼진다.
+  // Pro 자격은 두 경로다: 손으로 넣은 코드, 또는 계정에 귀속된 패스(기기를 바꿔도 따라온다).
+  const codeValid = gated ? Boolean(await passValidUntil(body.passCode)) : false;
+  const isPro = codeValid || (gated ? Boolean(await activePassFor(user?.id)) : false);
+  const validPass = codeValid ? body.passCode : undefined;
+
+  if (gated && !isPro) {
+    const count = await trackedCountByOwner({ userId: user?.id, anonId }, novelId);
+    if (count >= FREE_TRACK_LIMIT) {
+      await logEvent("track_402", { platform: platformOf(novelId), loggedIn: Boolean(user) });
+      return withCookie(
+        NextResponse.json(
+          {
+            error: "PRO_REQUIRED",
+            message: `무료는 ${FREE_TRACK_LIMIT}작품까지 추적할 수 있어요. Pro 패스로 무제한 추적하세요.`,
+          },
+          { status: 402 },
+        ),
+        freshAnonCookie,
       );
     }
   }
+
   try {
     const stats = await fetchNovelAny(novelId);
     await saveSnapshot(stats); // DB 없으면 no-op
-    // 유효한 패스면 추적에 연결 → 주간 성장 리포트(Pro) 대상이 된다
-    const validPass = (await passValidUntil(body.passCode)) ? body.passCode : undefined;
-    await trackNovel(novelId, { channel, contact: body.contact, passCode: validPass });
-    // tracked_novels는 (novel_id, email) unique upsert라 재등록이 안 남는다 → 시도 자체를 여기 기록
+    await trackNovel(novelId, {
+      userId: user?.id,
+      anonId,
+      channel,
+      contact: body.contact,
+      passCode: validPass, // 유효한 패스면 연결 → 주간 성장 리포트(Pro) 대상이 된다
+    });
+    // 같은 소유자·작품은 한 행으로 갱신되므로 재등록이 남지 않는다 → 시도 자체를 여기 기록
     await logEvent("track_add", {
       platform: platformOf(novelId),
       channel,
-      pro: Boolean(validPass),
+      pro: isPro,
+      loggedIn: Boolean(user),
       fromDiagnose: body.source === "diagnose",
     });
-    return NextResponse.json({ ok: true, tracked: dbEnabled(), stats });
+    return withCookie(NextResponse.json({ ok: true, tracked: dbEnabled(), stats }), freshAnonCookie);
   } catch (e) {
     console.error("[api/novel POST]", e);
     return NextResponse.json({ error: "추적 등록에 실패했어요." }, { status: 502 });
   }
+}
+
+function withCookie(res: NextResponse, cookie: string | null): NextResponse {
+  if (cookie) res.headers.append("Set-Cookie", cookie);
+  return res;
 }

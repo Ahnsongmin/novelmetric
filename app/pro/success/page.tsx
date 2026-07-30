@@ -4,6 +4,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { savePassCode } from "@/lib/session-client";
 
 function PaySuccess() {
   const sp = useSearchParams();
@@ -29,7 +30,9 @@ function PaySuccess() {
       .then(async (r) => {
         const j = await r.json();
         if (!r.ok) throw new Error(j.error ?? "결제 승인에 실패했어요.");
-        localStorage.setItem("nm_pass", JSON.stringify({ code: j.code }));
+        savePassCode(j.code);
+        // 로그인 상태면 이 호출로 패스가 계정에 귀속된다(기기를 바꿔도 따라오게).
+        void fetch(`/api/gate?code=${encodeURIComponent(j.code)}`);
         setCode(j.code);
         setExpiresAt(j.expiresAt);
         setState("done");

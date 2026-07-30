@@ -1,18 +1,21 @@
 // Pro 패스(30일 이용권) + 무료 사용량 게이트.
-//   무료: 제목진단 월 3회(서명 쿠키), 작품 추적 이메일당 1작품
-//   Pro: 결제 → NM-코드 발급(nm_pass) → 30일간 추적 무제한 + 진단 월 30회
-// 토스 키 또는 DB가 없으면 게이트 자체가 꺼져 전부 무료(기존 동작).
+//   비로그인: 작품 추적 1개까지 (제목 진단은 불가 — 계정이 있어야 한다)
+//   무료 회원: 추적 1작품 + 제목 진단 매달 1회
+//   Pro: 30일간 추적 무제한 + 진단 월 30회
+// 토스 키(또는 페이앱)와 DB가 없으면 게이트 자체가 꺼져 전부 무료(기존 동작).
+//
+// 한도는 항상 "소유자"(user_id 또는 비로그인 anon_id) 기준으로 센다. 예전처럼 연락처
+// 이메일 문자열로 세면 알림을 끈 사용자에게는 검사가 아예 돌지 않아 한도가 무의미했다.
 
-import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { getDb, dbEnabled } from "./db";
 
 export const PASS = { amount: 9900, days: 30, name: "노블메트릭 Pro 30일 패스" };
-export const FREE_DIAG_PER_MONTH = 3;
+export const FREE_DIAG_PER_MONTH = 1;
 // 진단만 Pro에도 상한이 있다 — 호출마다 실시간 AI 비용이 드는 유일한 기능이라,
 // 무제한이면 헤비 유저 한 명이 패스 값을 넘겨 쓸 수 있다. 추적·대시보드는 무제한.
 export const PRO_DIAG_PER_MONTH = 30;
 export const FREE_TRACK_LIMIT = 1;
-export const DIAG_COOKIE = "nm_diag";
 
 export function passEnabled(): boolean {
   // 결제 수단이 하나라도 켜져 있으면(토스 또는 페이앱) 무료 제한·패스 게이트 활성.
@@ -21,37 +24,6 @@ export function passEnabled(): boolean {
     process.env.PAYAPP_USERID && process.env.PAYAPP_LINKKEY && process.env.PAYAPP_LINKVAL,
   );
   return (toss || payapp) && dbEnabled();
-}
-
-// ── 무료 진단 쿼터: "YYYY-MM.사용횟수.서명" 쿠키 ───────────────────────────
-function sig(payload: string): string {
-  const secret = process.env.GATE_SECRET ?? process.env.TOSS_SECRET_KEY ?? "nm-dev-secret";
-  return createHmac("sha256", secret).update(payload).digest("hex").slice(0, 32);
-}
-
-function currentYm(): string {
-  return new Date().toISOString().slice(0, 7);
-}
-
-/** 쿠키에서 이번 달 사용 횟수를 읽는다. 위조/지난달이면 0. */
-export function diagUsed(cookieHeader: string | null): number {
-  const m = cookieHeader?.match(new RegExp(`(?:^|;\\s*)${DIAG_COOKIE}=([^;]+)`));
-  if (!m) return 0;
-  const [ym, n, s] = decodeURIComponent(m[1]).split(".");
-  if (!ym || !n || !s || ym !== currentYm()) return 0;
-  const want = Buffer.from(sig(`${ym}.${n}`));
-  const got = Buffer.from(s);
-  if (got.length !== want.length || !timingSafeEqual(got, want)) return 0;
-  return Number(n) || 0;
-}
-
-/** 사용 횟수 +1 한 Set-Cookie 값 */
-export function diagCookie(used: number): string {
-  const ym = currentYm();
-  const n = used + 1;
-  const value = encodeURIComponent(`${ym}.${n}.${sig(`${ym}.${n}`)}`);
-  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
-  return `${DIAG_COOKIE}=${value}; Path=/; Max-Age=2764800; HttpOnly; SameSite=Lax${secure}`;
 }
 
 // ── Pro 패스 ────────────────────────────────────────────────────────────────
@@ -85,11 +57,48 @@ export async function passValidUntil(code: string | undefined | null): Promise<s
   return exp && new Date(exp) > new Date() ? exp : null;
 }
 
-/** 이메일이 추적 중인 작품 수 (무료 1작품 제한용). 지정 novel_id 제외(재등록 허용). */
-export async function trackedCountByEmail(email: string, excludeNovelId?: number): Promise<number> {
+/** 계정에 연결된 유효 패스의 만료시각. 기기를 바꿔도 Pro가 따라오게 하는 근거. */
+export async function activePassFor(userId: string | null | undefined): Promise<string | null> {
+  if (!userId) return null;
+  const db = getDb();
+  if (!db) return null;
+  const { data } = await db
+    .from("nm_pass")
+    .select("expires_at")
+    .eq("user_id", userId)
+    .gt("expires_at", new Date().toISOString())
+    .order("expires_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return (data as { expires_at: string } | null)?.expires_at ?? null;
+}
+
+/** 로그인 상태로 코드를 적용하면 계정에 귀속시킨다. 이미 다른 계정 것이면 건드리지 않는다. */
+export async function linkPassToUser(code: string, userId: string): Promise<void> {
+  const db = getDb();
+  if (!db) return;
+  const { error } = await db
+    .from("nm_pass")
+    .update({ user_id: userId })
+    .eq("code", code)
+    .is("user_id", null);
+  if (error) console.error("[pass] 패스-계정 연결 실패:", error.message);
+}
+
+// ── 추적 한도 ───────────────────────────────────────────────────────────────
+export type TrackOwner = { userId?: string | null; anonId?: string | null };
+
+/** 소유자가 추적 중인 작품 수 (무료 1작품 제한용). 지정 novel_id 제외(재등록 허용). */
+export async function trackedCountByOwner(
+  owner: TrackOwner,
+  excludeNovelId?: number,
+): Promise<number> {
   const db = getDb();
   if (!db) return 0;
-  let q = db.from("tracked_novels").select("novel_id", { count: "exact", head: true }).eq("email", email);
+  let q = db.from("tracked_novels").select("novel_id", { count: "exact", head: true });
+  if (owner.userId) q = q.eq("user_id", owner.userId);
+  else if (owner.anonId) q = q.eq("anon_id", owner.anonId);
+  else return 0;
   if (excludeNovelId) q = q.neq("novel_id", excludeNovelId);
   const { count } = await q;
   return count ?? 0;

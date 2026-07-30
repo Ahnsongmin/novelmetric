@@ -91,9 +91,57 @@ alter table public.tracked_novels add column if not exists pass_code text;
 create table if not exists public.nm_events (
   id bigint generated always as identity primary key,
   event text not null,   -- diagnose_run | diagnose_402 | track_add | track_402 | pro_view | pro_paid
+                         --   | signup_request | signup_done | login | diagnose_401 | track_401
   meta jsonb,            -- { engine, genre, platform, channel } 등 집계용 값만
   created_at timestamptz not null default now()
 );
 create index if not exists nm_events_event_time_idx
   on public.nm_events (event, created_at desc);
 alter table public.nm_events enable row level security;
+
+-- Phase 5: 계정 (매직링크 로그인) ---------------------------------------------
+-- 도입 이유는 두 가지 구멍이다.
+--  1) 추적 무료 1작품 한도가 '알림 안 받음'을 고르면 이메일이 없어 통째로 스킵됐다.
+--  2) 진단 무료 횟수가 쿠키 기준이라 시크릿창으로 무한 반복됐다(호출마다 실제 AI 비용).
+-- 둘 다 "신원"이 없어서 생긴 문제라, 소유자 기준으로 세도록 바꾼다.
+-- 로그인 수단은 여러 개(구글·이메일+비밀번호·메일 링크)지만 계정은 이메일 하나로 통일된다.
+-- email이 unique라 어느 경로로 들어와도 같은 주소면 같은 계정이 된다.
+create table if not exists public.nm_users (
+  id uuid primary key default gen_random_uuid(),
+  email text not null unique,       -- 항상 소문자·trim 정규화 후 저장
+  password_hash text,               -- "scrypt$솔트$해시" (소셜/메일링크만 쓰는 계정은 null)
+  created_at timestamptz not null default now(),
+  last_login_at timestamptz
+);
+alter table public.nm_users add column if not exists password_hash text;
+alter table public.nm_users enable row level security;
+
+-- 매직링크 1회용 토큰. 원문은 메일에만 들어가고 DB에는 sha256 해시만 둔다(nm_pass와 같은 방침).
+create table if not exists public.nm_login_tokens (
+  token_hash text primary key,
+  email text not null,
+  expires_at timestamptz not null,
+  used_at timestamptz,
+  created_at timestamptz not null default now()
+);
+alter table public.nm_login_tokens enable row level security;
+
+-- 계정 기준 진단 사용량 (nm_diag 쿠키 카운터를 대체)
+create table if not exists public.nm_diag_usage (
+  user_id uuid not null references public.nm_users(id) on delete cascade,
+  ym text not null,                 -- 'YYYY-MM'
+  used int not null default 0,
+  primary key (user_id, ym)
+);
+alter table public.nm_diag_usage enable row level security;
+
+-- 소유자 컬럼. 기존 email 컬럼과 unique(novel_id, email)은 그대로 둬서 옛 행을 보존한다.
+alter table public.tracked_novels add column if not exists user_id uuid references public.nm_users(id);
+alter table public.tracked_novels add column if not exists anon_id text;  -- 비로그인 1작품 카운트용
+alter table public.nm_pass        add column if not exists user_id uuid references public.nm_users(id);
+
+-- NULL끼리는 서로 구분되므로 partial index로 각각 건다.
+create unique index if not exists tracked_by_user_idx
+  on public.tracked_novels (novel_id, user_id) where user_id is not null;
+create unique index if not exists tracked_by_anon_idx
+  on public.tracked_novels (novel_id, anon_id) where anon_id is not null;

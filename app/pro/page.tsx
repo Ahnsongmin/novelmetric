@@ -6,9 +6,12 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import AuthBadge from "@/components/AuthBadge";
+import { savePassCode, storedPassCode } from "@/lib/session-client";
 
 type Gate = {
   enabled: boolean;
+  loggedIn: boolean;
   freeLeft: number | null;
   passValidUntil: string | null;
   clientKey: string | null;
@@ -16,22 +19,12 @@ type Gate = {
   pass: { amount: number; days: number; name: string };
 };
 
-const PASS_KEY = "nm_pass";
-
-function storedPass(): string | null {
-  try {
-    return (JSON.parse(localStorage.getItem(PASS_KEY) ?? "null") as { code?: string } | null)?.code ?? null;
-  } catch {
-    return null;
-  }
-}
-
 const FREE_FEATURES = [
   "작품 추적 1개 — 매일 새벽 자동 수집",
   "연독률·이탈 분석 · CSV",
   "지표 급변·이정표 알림 (이메일 등록 시)",
   "베스트 분석 · 트렌드 리포트 열람",
-  "제목 진단 월 3회",
+  "제목 진단 매달 1회 (무료 회원가입 필요)",
 ];
 const PRO_FEATURES = [
   "작품 추적 무제한 — 경쟁작도 나란히 추적",
@@ -53,7 +46,7 @@ function ProContent() {
   const [error, setError] = useState(sp.get("pay") === "fail" ? "결제가 취소되거나 실패했어요." : "");
 
   useEffect(() => {
-    const code = storedPass();
+    const code = storedPassCode();
     // from=pro → 판매 페이지 조회를 퍼널 이벤트로 기록(대시보드에서 오는 gate 호출과 구분)
     const qs = new URLSearchParams({ from: "pro" });
     if (code) qs.set("code", code);
@@ -125,16 +118,20 @@ function ProContent() {
       setError("코드를 찾을 수 없거나 만료됐어요.");
       return;
     }
-    localStorage.setItem(PASS_KEY, JSON.stringify({ code }));
+    savePassCode(code);
     setValidUntil(g.passValidUntil);
   }
 
   return (
     <main className="mx-auto max-w-3xl flex-1 px-5 py-12">
-      <Link href="/" className="text-sm text-muted hover:text-foreground">← 노블메트릭</Link>
+      <div className="flex items-center justify-between gap-3">
+        <Link href="/" className="text-sm text-muted hover:text-foreground">← 노블메트릭</Link>
+        <AuthBadge next="/pro" />
+      </div>
       <h1 className="mt-3 text-3xl font-bold">Pro 패스</h1>
-      <p className="mt-2 text-muted">
-        회원가입 없이, 결제하면 받는 <b className="text-foreground">코드 한 줄</b>로 30일 동안 모든 기능이 열립니다.
+      <p className="mt-2 break-keep text-muted">
+        결제하면 받는 <b className="text-foreground">코드 한 줄</b>로 30일 동안 열립니다. 로그인한
+        상태로 코드를 넣으면 계정에 연결돼, 기기를 바꾸거나 코드를 잃어버려도 그대로 쓸 수 있어요.
       </p>
 
       {validUntil && (
@@ -218,7 +215,12 @@ function ProContent() {
               적용
             </button>
           </div>
-          <p className="mt-2 text-xs text-muted">다른 기기에서 결제했다면 받은 코드를 입력하면 이 기기에서도 열려요.</p>
+          <p className="mt-2 break-keep text-xs text-muted">
+            다른 기기에서 결제했다면 받은 코드를 입력하면 이 기기에서도 열려요.
+            {gate?.loggedIn
+              ? " 로그인 상태라 코드가 계정에 연결됩니다."
+              : " 로그인한 뒤 넣으면 계정에 연결돼 다음부터는 코드 없이도 열립니다."}
+          </p>
         </div>
       )}
     </main>

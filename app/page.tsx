@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import AuthBadge from "@/components/AuthBadge";
+import LoginGate from "@/components/LoginGate";
+import { storedPassCode } from "@/lib/session-client";
 
 type DiagnoseResult = {
   score: number;
@@ -99,6 +102,7 @@ function Header() {
           >
             Pro
           </a>
+          <AuthBadge />
         </nav>
       </div>
     </header>
@@ -126,7 +130,7 @@ function Hero() {
       </div>
       <div className="mt-10">
         <p className="mb-3 text-center text-xs font-semibold text-muted">
-          <span className="text-accent-2">1단계</span> · 제목 클릭률 무료 진단 (가입 없이 즉시)
+          <span className="text-accent-2">1단계</span> · 제목 클릭률 무료 진단 (가입하면 매달 1회)
         </p>
         <DiagnoseTool />
       </div>
@@ -149,28 +153,32 @@ function DiagnoseTool() {
   const [result, setResult] = useState<DiagnoseResult | null>(null);
 
   const [proRequired, setProRequired] = useState(false);
+  const [loginNeeded, setLoginNeeded] = useState("");
 
-  async function run(e: React.FormEvent) {
-    e.preventDefault();
+  // 가입 직후 자동 재실행에도 쓰이므로 이벤트는 선택 인자다.
+  async function run(e?: React.FormEvent) {
+    e?.preventDefault();
     if (!title.trim()) {
       setError("제목을 입력해 주세요.");
       return;
     }
     setError("");
     setProRequired(false);
+    setLoginNeeded("");
     setLoading(true);
     setResult(null);
     try {
-      let passCode: string | undefined;
-      try {
-        passCode = (JSON.parse(localStorage.getItem("nm_pass") ?? "null") as { code?: string } | null)?.code;
-      } catch {}
       const res = await fetch("/api/diagnose", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, synopsis, genre, platform: "문피아", passCode }),
+        body: JSON.stringify({ title, synopsis, genre, platform: "문피아", passCode: storedPassCode() }),
       });
       const data = await res.json();
+      if (res.status === 401) {
+        // 진단은 호출마다 실제 비용이 들어 계정이 필요하다 — 그 자리에서 바로 가입시킨다.
+        setLoginNeeded(data.message || "제목 진단은 무료 회원가입 후 이용할 수 있어요.");
+        return;
+      }
       if (res.status === 402) {
         // 무료 한도 소진일 때만 Pro 안내 — Pro 사용자가 월 상한에 닿은 경우엔 링크가 무의미하다
         setProRequired(data.error === "PRO_REQUIRED");
@@ -255,6 +263,20 @@ function DiagnoseTool() {
           </p>
         )}
 
+        {loginNeeded && (
+          <div className="mt-3">
+            {/* 가입에 성공하면 입력해둔 제목 그대로 진단을 이어서 실행한다(다시 치게 하지 않는다). */}
+            <LoginGate
+              message={loginNeeded}
+              next="/#top"
+              onSuccess={() => {
+                setLoginNeeded("");
+                void run();
+              }}
+            />
+          </div>
+        )}
+
         <button
           type="submit"
           disabled={loading}
@@ -263,7 +285,7 @@ function DiagnoseTool() {
           {loading ? "분석 중…" : "무료로 제목 진단하기"}
         </button>
         <p className="mt-2 text-center text-xs text-muted">
-          가입 없이 즉시 결과 확인 · 무료
+          무료 회원가입 후 매달 1회 무료
         </p>
       </form>
 
@@ -623,7 +645,7 @@ function FAQ() {
     },
     {
       q: "무료인가요?",
-      a: "작품 1개 추적(매일 자동 수집 + 급변·이정표 이메일 알림), 연독률·투베 게이지 분석, 제목 진단 월 3회까지 무료입니다. Pro(9,900원/30일, 자동결제 없음)는 추적 작품 무제한, 경쟁작 주간 비교 메일, 장르 벤치마크, 심화 추이 분석을 더해 줍니다.",
+      a: "작품 1개 추적과 연독률·투베 게이지 분석은 가입 없이 바로 됩니다. 이메일 알림 등록과 제목 진단(매달 1회)은 무료 회원가입이 필요해요 — 이메일 주소만 넣으면 링크로 로그인됩니다. Pro(9,900원/30일, 자동결제 없음)는 추적 작품 무제한, 경쟁작 주간 비교 메일, 장르 벤치마크, 심화 추이 분석을 더해 줍니다.",
     },
   ];
   return (
@@ -656,7 +678,7 @@ function Roadmap() {
       tag: "지금",
       on: true,
       title: "제목·소개글 클릭률 진단",
-      desc: "AI가 후킹 점수와 대안 제목을 제시 (무료 월 3회)",
+      desc: "AI가 후킹 점수와 대안 제목을 제시 (가입 시 매달 1회 무료)",
     },
     {
       tag: "지금",

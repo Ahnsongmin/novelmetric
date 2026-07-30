@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import AuthBadge from "@/components/AuthBadge";
+import LoginGate from "@/components/LoginGate";
+import { fetchMe, storedPassCode, type Me } from "@/lib/session-client";
 
 type Stats = {
   novelId: number;
@@ -119,8 +122,27 @@ export default function DashboardPage() {
   const [recents, setRecents] = useState<{ id: number; title: string }[]>([]);
 
   const [isPro, setIsPro] = useState(false);
+  const [me, setMe] = useState<Me | null>(null);
+  const [loginNeeded, setLoginNeeded] = useState("");
+  const [proNeeded, setProNeeded] = useState("");
   // 제목 진단 결과에서 넘어왔는지 — 추적 등록 시 유입 경로로 함께 기록한다
   const [fromDiagnose, setFromDiagnose] = useState(false);
+
+  // 계정 기능이 켜져 있는데 로그인 전이면 알림 채널을 켤 수 없다(알림 주소가 곧 신원).
+  const needsLogin = Boolean(me?.enabled) && !me?.email;
+
+  // 카드 안에서 가입/로그인이 끝나면 페이지를 새로 고치지 않고 하던 작업을 이어간다.
+  async function handleLoggedIn(resume: boolean) {
+    const m = await fetchMe();
+    setMe(m);
+    setLoginNeeded("");
+    if (m.email) {
+      setChannel("email");
+      setContact(m.email);
+      // setState는 즉시 반영되지 않으므로 이어서 보낼 값은 인자로 직접 넘긴다.
+      if (resume) void track({ channel: "email", contact: m.email });
+    }
+  }
 
   useEffect(() => {
     try {
@@ -129,17 +151,18 @@ export default function DashboardPage() {
       /* ignore */
     }
     // Pro 패스 유효 여부 (게이트 꺼짐 = 전부 무료 = Pro 취급)
-    try {
-      const code = (JSON.parse(localStorage.getItem("nm_pass") ?? "null") as { code?: string } | null)?.code;
-      fetch(`/api/gate${code ? `?code=${encodeURIComponent(code)}` : ""}`)
-        .then((r) => r.json())
-        .then((g: { enabled: boolean; passValidUntil: string | null }) =>
-          setIsPro(!g.enabled || Boolean(g.passValidUntil)),
-        )
-        .catch(() => {});
-    } catch {
-      /* ignore */
-    }
+    const code = storedPassCode();
+    fetch(`/api/gate${code ? `?code=${encodeURIComponent(code)}` : ""}`)
+      .then((r) => r.json())
+      .then((g: { enabled: boolean; passValidUntil: string | null }) =>
+        setIsPro(!g.enabled || Boolean(g.passValidUntil)),
+      )
+      .catch(() => {});
+    // 로그인 상태 — 비로그인이면 알림 없는 추적이 기본값이 되도록 채널을 내린다
+    fetchMe().then((m) => {
+      setMe(m);
+      if (m.enabled && !m.email) setChannel("none");
+    });
   }, []);
 
   function pushRecent(id: number, title: string) {
@@ -226,28 +249,30 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function track() {
+  async function track(override?: { channel?: "none" | "email" | "kakao"; contact?: string }) {
     if (!data) return;
     setTracking(true);
+    setLoginNeeded("");
+    setProNeeded("");
     try {
-      let passCode: string | undefined;
-      try {
-        passCode = (JSON.parse(localStorage.getItem("nm_pass") ?? "null") as { code?: string } | null)?.code;
-      } catch {}
       const res = await fetch("/api/novel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           q: String(data.stats.novelId),
-          channel,
-          contact,
-          passCode,
+          channel: override?.channel ?? channel,
+          contact: override?.contact ?? contact,
+          passCode: storedPassCode(),
           source: fromDiagnose ? "diagnose" : undefined,
         }),
       });
       const json = await res.json();
+      if (res.status === 401) {
+        setLoginNeeded(json.message || "알림을 받으려면 무료 회원가입이 필요해요.");
+        return;
+      }
       if (res.status === 402) {
-        setError(`${json.message || "무료 추적 한도에 도달했어요."} → 메뉴의 Pro 패스에서 업그레이드`);
+        setProNeeded(json.message || "무료 추적 한도에 도달했어요.");
         return;
       }
       if (!res.ok) throw new Error(json.error || "추적 실패");
@@ -263,9 +288,12 @@ export default function DashboardPage() {
   // 되면서 모바일에서 페이지 전체가 가로로 넘치던 문제를 막는다. best·compare 페이지도 동일.
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-5 py-10">
-      <a href="/" className="text-sm text-muted hover:text-foreground">
-        ← 노블메트릭
-      </a>
+      <div className="flex items-center justify-between gap-3">
+        <a href="/" className="text-sm text-muted hover:text-foreground">
+          ← 노블메트릭
+        </a>
+        <AuthBadge next="/dashboard" />
+      </div>
       <h1 className="mt-3 text-2xl font-bold md:text-3xl">작품 성장 대시보드</h1>
       <p className="mt-1.5 text-muted">
         <b className="text-foreground">작품 제목</b>으로 검색하거나 문피아·노벨피아·네이버시리즈·카카오페이지 URL을
@@ -437,9 +465,14 @@ export default function DashboardPage() {
             setChannel={setChannel}
             contact={contact}
             setContact={setContact}
-            onTrack={track}
+            onTrack={() => void track()}
             dbEnabled={data.dbEnabled}
             novelId={data.stats.novelId}
+            needsLogin={needsLogin}
+            loginNeeded={loginNeeded}
+            proNeeded={proNeeded}
+            accountEmail={me?.email ?? ""}
+            onLoggedIn={handleLoggedIn}
           />
         </div>
       )}
@@ -580,6 +613,11 @@ function TrackBox({
   onTrack,
   dbEnabled,
   novelId,
+  needsLogin,
+  loginNeeded,
+  proNeeded,
+  accountEmail,
+  onLoggedIn,
 }: {
   tracked: boolean;
   tracking: boolean;
@@ -590,6 +628,11 @@ function TrackBox({
   onTrack: () => void;
   dbEnabled: boolean;
   novelId: number;
+  needsLogin: boolean;
+  loginNeeded: string;
+  proNeeded: string;
+  accountEmail: string;
+  onLoggedIn: (resume: boolean) => void;
 }) {
   if (tracked) {
     return (
@@ -601,7 +644,14 @@ function TrackBox({
         <p className="mt-1.5 text-xs text-muted">
           📅 다음 수집은 매일 새벽 3시 — 내일 이 작품을 다시 검색하면 첫 변화 추이가 보입니다.
         </p>
-        {channel !== "email" && <EmailNudge novelId={novelId} />}
+        {channel !== "email" && (
+          <EmailNudge
+            novelId={novelId}
+            needsLogin={needsLogin}
+            accountEmail={accountEmail}
+            onLoggedIn={onLoggedIn}
+          />
+        )}
       </div>
     );
   }
@@ -636,7 +686,16 @@ function TrackBox({
           </button>
         ))}
       </div>
-      {channel !== "none" ? (
+      {/* 알림을 켜는 순간부터 계정이 필요하다 — 보낼 주소가 곧 신원이라 그 자리에서 가입시킨다. */}
+      {channel !== "none" && needsLogin ? (
+        <div className="mt-3">
+          <LoginGate
+            message="알림을 받으려면 무료 회원가입이 필요해요. 가입하면 이 작품 추적이 바로 등록됩니다."
+            next="/dashboard"
+            onSuccess={() => onLoggedIn(true)}
+          />
+        </div>
+      ) : channel !== "none" ? (
         <input
           value={contact}
           onChange={(e) => setContact(e.target.value)}
@@ -646,13 +705,28 @@ function TrackBox({
       ) : (
         <p className="mt-2 text-xs text-muted">* 이메일을 남기면 변화가 있는 날에만 알려드려요. 스팸·광고는 없습니다.</p>
       )}
-      <button
-        onClick={onTrack}
-        disabled={tracking || (channel !== "none" && !contact.trim())}
-        className="mt-3 w-full rounded-lg bg-gradient-to-r from-accent to-accent-2 py-2.5 text-sm font-bold text-background transition hover:opacity-90 disabled:opacity-60"
-      >
-        {tracking ? "등록 중…" : "추적 시작하기"}
-      </button>
+      {!(channel !== "none" && needsLogin) && (
+        <button
+          onClick={onTrack}
+          disabled={tracking || (channel !== "none" && !contact.trim())}
+          className="mt-3 w-full rounded-lg bg-gradient-to-r from-accent to-accent-2 py-2.5 text-sm font-bold text-background transition hover:opacity-90 disabled:opacity-60"
+        >
+          {tracking ? "등록 중…" : "추적 시작하기"}
+        </button>
+      )}
+      {loginNeeded && (
+        <div className="mt-3">
+          <LoginGate message={loginNeeded} next="/dashboard" onSuccess={() => onLoggedIn(true)} />
+        </div>
+      )}
+      {proNeeded && (
+        <p role="alert" className="mt-3 break-keep text-sm text-accent-2">
+          {proNeeded}
+          <a href="/pro" className="ml-2 font-bold text-accent underline">
+            Pro 패스 보기 →
+          </a>
+        </p>
+      )}
       {!dbEnabled && (
         <p className="mt-2 text-xs text-muted">* 추이·알림은 DB 연결 시 작동합니다.</p>
       )}
@@ -661,8 +735,18 @@ function TrackBox({
 }
 
 // 알림 없이 추적 등록한 유저에게 이메일을 부드럽게 권유 — 등록 시 같은 작품에 이메일 알림을 추가
-function EmailNudge({ novelId }: { novelId: number }) {
-  const [email, setEmail] = useState("");
+function EmailNudge({
+  novelId,
+  needsLogin,
+  accountEmail,
+  onLoggedIn,
+}: {
+  novelId: number;
+  needsLogin: boolean;
+  accountEmail: string;
+  onLoggedIn: (resume: boolean) => void;
+}) {
+  const [email, setEmail] = useState(accountEmail);
   const [state, setState] = useState<"idle" | "saving" | "done" | "error">("idle");
   if (state === "done") {
     return <p className="mt-2 text-xs text-emerald-300">📧 이메일 알림이 등록되었어요. 변화가 있는 날에만 보내드립니다.</p>;
@@ -671,19 +755,32 @@ function EmailNudge({ novelId }: { novelId: number }) {
     if (!email.trim()) return;
     setState("saving");
     try {
-      let passCode: string | undefined;
-      try {
-        passCode = (JSON.parse(localStorage.getItem("nm_pass") ?? "null") as { code?: string } | null)?.code;
-      } catch {}
       const res = await fetch("/api/novel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ q: String(novelId), channel: "email", contact: email.trim(), passCode }),
+        body: JSON.stringify({
+          q: String(novelId),
+          channel: "email",
+          contact: email.trim(),
+          passCode: storedPassCode(),
+        }),
       });
       setState(res.ok ? "done" : "error");
     } catch {
       setState("error");
     }
+  }
+  // 비로그인이면 이메일 입력 대신 가입을 받는다 — 로그인하면 이 추적은 계정으로 그대로 넘어온다.
+  if (needsLogin) {
+    return (
+      <div className="mt-2.5 border-t border-emerald-400/20 pt-2.5">
+        <LoginGate
+          message="변화가 있는 날 이메일로 받아보려면 무료 회원가입이 필요해요. 방금 등록한 추적도 계정으로 그대로 이어집니다."
+          next="/dashboard"
+          onSuccess={() => onLoggedIn(true)}
+        />
+      </div>
+    );
   }
   return (
     <div className="mt-2.5 border-t border-emerald-400/20 pt-2.5">

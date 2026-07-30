@@ -16,7 +16,15 @@
 - ✅ **페이앱 전자계약 서명** (7/25) — 정산 심사 3~4영업일, ~7/29경 완료 예상. 정산금 10만원 미만은 다음 정산 이월(약 11건부터 입금)
 - ✅ **휴대전화 결제 제외 배포** (7/25) — openpaytype=card,kakaopay,naverpay,tosspay,payco (계약 특칙 '수납률 99%' 리스크 차단, 결제창에서 휴대전화 미노출 확인)
 - ✅ **체험 코드 10개 DB 삽입** (7/24) — Supabase 실행 + gate API로 유효/만료 검증 완료
-- ⬜ 아카 글 원고 확정 (아래)
+- ✅ 아카 글 원고 확정 (7/27) — `scripts/arca-post-2026-07-27.txt` (UTM launch-0727 포함)
+
+## D-Day (7/27) 실행 기록
+- ✅ **10:00경 라이브 점검** — gate API 코드 유효(passValidUntil 2026-09-30), /pro 200 OK
+- ✅ **대기자 메일 발송** (`send-waitlist-email.mjs --live`) — SMTP 10/10 접수, 이후 `mmh654789@naver.com` 1건 반송(주소 없음) → **실전달 9/10**. 해당 코드(NM-C0A527CBD1AC)는 미사용 보관, 본인 연락 시 재발송
+- ✅ **아카 글 게시 완료 (10:46)** — https://arca.live/b/webfiction/178096419 (말머리 정보/TIP, 계정 노블메트릭)
+  - Playwright 세션 만료 → 사용자 크롬(claude-in-chrome)으로 게시. 게시 2분 뒤 조회 9·추천 3
+  - 반응 추적: `node scripts/track-arca-post.mjs` (새 글 기본값, `--post ID`로 변경 가능)
+  - 댓글 답글: `node scripts/arca-session.mjs comment ...` (대상 새 글로 갱신됨)
 
 ## 월요일 오전 발사 순서
 

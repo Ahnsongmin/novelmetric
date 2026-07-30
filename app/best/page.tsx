@@ -193,7 +193,9 @@ export default async function BestPage({ searchParams }: Props) {
 
           <div className="mt-10 rounded-2xl border border-border bg-card/40 p-6 text-center">
             <p className="font-bold">내 작품 제목은 몇 점일까?</p>
-            <p className="mt-1 text-sm text-muted">상위작 패턴 기준으로 클릭률을 무료 진단해 보세요.</p>
+            <p className="mt-1 break-keep text-sm text-muted">
+              상위작 패턴 기준으로 클릭률을 진단해 보세요. 무료 회원가입 후 매달 1회 무료입니다.
+            </p>
             <a
               href="/#top"
               className="mt-4 inline-block rounded-lg bg-gradient-to-r from-accent to-accent-2 px-6 py-2.5 font-bold text-background"
