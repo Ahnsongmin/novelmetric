@@ -8,19 +8,17 @@ Claude가 대신 하지 않는 이유: 개발자센터 앱 생성은 계정 설�
 
 ---
 
-## 0. 먼저 실행할 SQL 한 줄 (필수)
-
-비밀번호 로그인이 동작하려면 컬럼이 하나 필요하다. Supabase → SQL Editor → 붙여넣고 Run:
+## 0. 비밀번호 로그인용 컬럼 — **2026-07-30 실행 완료**
 
 ```sql
 alter table public.nm_users add column if not exists password_hash text;
-
--- 겸사겸사 검증용 테스트 데이터 정리
-delete from tracked_novels where anon_id is not null;
-delete from nm_diag_usage;
 ```
 
-이 컬럼이 없으면 비밀번호 가입/로그인이 500으로 실패한다(계정이 잘못 만들어지지는 않는다).
+`nm_users`가 `id · email · created_at · last_login_at · password_hash`로 확인됨.
+프로덕션에서 가입·로그인·오류 응답까지 검증했으므로 더 할 일은 없다.
+
+> Supabase SQL Editor에 **`/sql/new`로 바로 들어가면 화면이 빈 채로 멈춘다.**
+> `/editor`(Table Editor)를 먼저 띄운 뒤 왼쪽 메뉴에서 SQL Editor를 눌러야 열린다.
 
 ---
 
@@ -102,8 +100,8 @@ delete from nm_diag_usage;
 
 | 수단 | 지금 쓸 수 있나 | 필요한 것 |
 |---|---|---|
-| 이메일 + 비밀번호 | ✅ | 위 0번 SQL 한 줄 |
-| 메일 링크(비밀번호 없이) | ✅ 이미 동작 중 | 없음 |
+| 이메일 + 비밀번호 | ✅ 동작 중(기본 수단) | 없음 (0번 완료) |
+| 메일 링크 | ✅ 동작 중 — "비밀번호 찾기" 자리 | 없음 |
 | 구글 | ✅ 오늘 가능 | 위 1번 (심사 없음) |
 | 카카오 | ⏳ | 비즈앱 전환 심사 |
 | 네이버 | ⏳ | 검수 약 1주일 |
