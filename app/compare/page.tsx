@@ -52,10 +52,8 @@ export default function ComparePage() {
 
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-5 py-10">
-      <a href="/" className="text-sm text-muted hover:text-foreground">
-        ← 노블메트릭
-      </a>
-      <h1 className="mt-3 text-2xl font-bold md:text-3xl">작품 비교</h1>
+      {/* 뒤로 가기 링크는 layout.tsx의 SiteNav(전 페이지 공통 네비)로 대체됐다. */}
+      <h1 className="text-2xl font-bold md:text-3xl">작품 비교</h1>
       <p className="mt-1.5 text-muted">
         내 작품과 경쟁작을 나란히 비교하세요. 연독률·선작·조회수·추천을 한눈에. (작품 ID 또는 문피아·노벨피아·네이버시리즈·카카오페이지 URL)
       </p>

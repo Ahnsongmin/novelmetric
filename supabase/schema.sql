@@ -145,3 +145,46 @@ create unique index if not exists tracked_by_user_idx
   on public.tracked_novels (novel_id, user_id) where user_id is not null;
 create unique index if not exists tracked_by_anon_idx
   on public.tracked_novels (novel_id, anon_id) where anon_id is not null;
+
+-- Phase 6: 계정 없이 코드만 가진 Pro 손님의 진단 사용량 -------------------------
+-- 2026-07-27 결제 손님이 계정 없이 코드만 갖고 있었는데, 7/29 배포한 "진단=로그인 필수"
+-- 게이트에 막혀 돈을 내고도 진단을 못 쓰는 상태가 됐다. 로그인 벽으로 막는 대신
+-- 유효한 코드를 신원으로 인정하고, 월 한도는 이 표로 코드 기준으로 센다.
+create table if not exists public.nm_diag_usage_code (
+  code text not null references public.nm_pass(code) on delete cascade,
+  ym text not null,                 -- 'YYYY-MM'
+  used int not null default 0,
+  primary key (code, ym)
+);
+alter table public.nm_diag_usage_code enable row level security;
+
+-- Phase 7: 문의 접수 -----------------------------------------------------------
+-- 유료 고객이 생겼는데 사이트에 연락 창구가 없었다(결제 지연 화면의 mailto 하나가 전부).
+-- 접수는 메일 발송이 1순위이고 이 표는 이력·중복 확인용 보조라, insert가 실패해도
+-- /api/contact는 성공으로 응답한다(표가 없어도 문의는 접수된다).
+create table if not exists public.nm_inquiry (
+  id bigint generated always as identity primary key,
+  kind text not null,               -- payment | bug | idea | etc
+  email text not null,              -- 답장받을 주소
+  message text not null,
+  pass_code text,                   -- 결제 문의 식별용(있으면)
+  user_id uuid references public.nm_users(id),
+  sender_hash text,                 -- 도배 차단용 해시(원본 IP는 저장하지 않음)
+  mailed boolean not null default false,
+  handled_at timestamptz,           -- 답변 완료 표시(수동)
+  created_at timestamptz not null default now()
+);
+create index if not exists nm_inquiry_sender_idx on public.nm_inquiry (sender_hash, created_at desc);
+alter table public.nm_inquiry enable row level security;
+
+-- Phase 8: 조회 기반 자동 수집 — 새 표 없음 ------------------------------------
+-- 매일 받아오는 4개 플랫폼 랭킹은 "이미 잘 되는 작품"뿐이라 고객의 작품(랭킹 밖)은 자동으로
+-- 절대 안 들어온다. 대신 **누군가 조회한 작품**은 수요가 증명된 작품이므로, 조회만 해도
+-- 수집 대상에 올려 다음날부터 추이가 생기게 한다(등록·가입 불필요).
+--
+-- 저장은 위의 `nm_events`를 겸용한다: event='novel_view', meta={novelId, platform}.
+-- 전용 표를 만들지 않은 이유는 두 가지다.
+--   ① 스키마 변경이 병목이다(대시보드가 자주 멈춘다) — 새 표 없이 즉시 동작하는 편이 낫다.
+--   ② 조회 자체가 퍼널 지표다 — "진단 vs 추적" 비교에 빠져 있던 조회 수치가 함께 생긴다.
+-- 대상 목록은 lib/db.ts의 listRecentlyViewedIds()가 최신순 이벤트를 훑어 중복 제거해 만든다
+-- (PostgREST는 GROUP BY를 못 쓴다). 30일 넘게 조회가 없으면 자동으로 대상에서 빠진다.

@@ -4,9 +4,7 @@
 // 결제 env가 없으면(준비 전) 대기 안내만 보여준다.
 
 import { Suspense, useEffect, useState } from "react";
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import AuthBadge from "@/components/AuthBadge";
 import { savePassCode, storedPassCode } from "@/lib/session-client";
 
 type Gate = {
@@ -26,14 +24,20 @@ const FREE_FEATURES = [
   "베스트 분석 · 트렌드 리포트 열람",
   "제목 진단 매달 1회 (무료 회원가입 필요)",
 ];
+// 문구는 "조건 없이 다 된다"로 읽히면 안 된다(2026-07-30 정직성 수정).
+// 실측으로 확인된 제약 두 가지를 각 항목에 그대로 적는다.
+//   ① 메일로 가는 3종(주간 리포트·경쟁작 워치·이탈 경보)은 대시보드에서 작품을 추적하고
+//      이메일 알림을 켠 사람만 대상이 된다(lib/db.ts listWeeklyTargets).
+//   ② 연독률 기반 기능(장르 벤치마크·이탈 경보)은 회차별 조회수를 주는 문피아·노벨피아만
+//      가능하다. 네이버시리즈·카카오페이지는 회차 조회수 비공개라 원천적으로 계산이 안 된다.
 const PRO_FEATURES = [
-  "작품 추적 무제한 — 경쟁작도 나란히 추적",
-  "경쟁작 워치 — 추적 작품끼리 주간 성적 비교표 메일 (누가 얼마나 앞섰는지)",
-  "장르 벤치마크 — 장르 상위권 연독률·성장 속도 대비 내 위치",
+  "작품 추적 무제한 — 경쟁작도 나란히 추적 (4개 플랫폼)",
   "심화 추이 분석 — 일별 증감표·성장 속도·이정표 예상",
-  "이탈 경보 — 새 회차에서 이탈 감지되면 다음날 아침 메일",
-  "주간 성장 리포트 이메일 (매주 월요일)",
+  "장르 벤치마크 — 장르 상위권 연독률 대비 내 위치 (문피아·노벨피아 작품)",
   "제목 진단 월 30회",
+  "주간 성장 리포트 이메일 — 매주 월요일 (이메일 알림 설정 시)",
+  "경쟁작 워치 — 추적 작품끼리 주간 비교표 메일 (2작품 이상 + 이메일 알림 설정 시)",
+  "이탈 경보 — 새 회차 이탈 감지되면 다음날 아침 메일 (문피아·노벨피아 · 이메일 알림 설정 시)",
 ];
 
 function ProContent() {
@@ -124,11 +128,8 @@ function ProContent() {
 
   return (
     <main className="mx-auto max-w-3xl flex-1 px-5 py-12">
-      <div className="flex items-center justify-between gap-3">
-        <Link href="/" className="text-sm text-muted hover:text-foreground">← 노블메트릭</Link>
-        <AuthBadge next="/pro" />
-      </div>
-      <h1 className="mt-3 text-3xl font-bold">Pro 패스</h1>
+      {/* 상단 네비·계정 배지는 layout.tsx의 SiteNav가 공통으로 그린다. */}
+      <h1 className="text-3xl font-bold">Pro 패스</h1>
       <p className="mt-2 break-keep text-muted">
         결제하면 받는 <b className="text-foreground">코드 한 줄</b>로 30일 동안 열립니다. 로그인한
         상태로 코드를 넣으면 계정에 연결돼, 기기를 바꾸거나 코드를 잃어버려도 그대로 쓸 수 있어요.
@@ -163,6 +164,16 @@ function ProContent() {
               <li key={f}>✓ {f}</li>
             ))}
           </ul>
+          {/* 메일 혜택이 왜 안 오는지 나중에 묻게 만들지 말고 여기서 미리 알린다. */}
+          <p className="mt-3 break-keep rounded-lg border border-border bg-background/40 p-2.5 text-xs text-muted">
+            메일로 오는 3가지(주간 리포트·경쟁작 워치·이탈 경보)는{" "}
+            <a href="/dashboard" className="text-accent underline underline-offset-2">
+              대시보드
+            </a>
+            에서 작품을 추적하고 <b className="text-foreground">이메일 알림을 켜야</b> 발송됩니다.
+            연독률을 쓰는 기능(장르 벤치마크·이탈 경보)은 회차별 조회수를 공개하는{" "}
+            <b className="text-foreground">문피아·노벨피아</b> 작품에만 적용돼요.
+          </p>
           {gate?.payapp ? (
             <div className="mt-5">
               <input
@@ -220,6 +231,13 @@ function ProContent() {
             {gate?.loggedIn
               ? " 로그인 상태라 코드가 계정에 연결됩니다."
               : " 로그인한 뒤 넣으면 계정에 연결돼 다음부터는 코드 없이도 열립니다."}
+          </p>
+          {/* 결제 관련 문의는 여기서 가장 많이 생긴다 — 유형을 미리 골라 보낸다. */}
+          <p className="mt-3 break-keep text-xs text-muted">
+            결제했는데 코드를 못 받으셨거나 코드를 잃어버리셨나요?{" "}
+            <a href="/contact?kind=payment" className="font-bold text-accent hover:underline">
+              결제 문의하기 →
+            </a>
           </p>
         </div>
       )}

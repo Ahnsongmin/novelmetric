@@ -139,6 +139,61 @@ export async function listTrackedNovelIds(): Promise<number[]> {
   return [...new Set(ids)];
 }
 
+// ── 조회 기반 자동 수집 ─────────────────────────────────────────────────────
+// 왜 필요한가: 매일 받아오는 4개 플랫폼 랭킹은 "이미 잘 되는 작품"뿐이라, 정작 우리 고객의
+// 작품(랭킹 밖)은 아무리 자동 수집을 늘려도 절대 안 들어온다. 반대로 **누군가 대시보드에서
+// 조회한 작품**은 실제 수요가 있는 작품이다. 그래서 조회만 해도 그 순간부터 수집 대상에 넣어
+// 다음날부터 추이가 생기게 한다(등록·가입 불필요). 나중에 그 사람이 돌아오면 이미 쌓인
+// 추이를 그 자리에서 보게 되는 게 핵심 가치다.
+//
+// tracked_novels에 섞지 않는 이유: 무료 1작품 한도 계산(trackedCountByOwner),
+// 알림 대상(listNotifyPrefs), 주간 리포트 대상(listWeeklyTargets)이 전부 tracked_novels를
+// 기준으로 돌아간다. 자동 수집분이 거기 섞이면 남의 한도를 깎거나 원치 않는 메일을 보낼 수 있다.
+//
+// 저장소는 **이미 있는 `nm_events`를 조회 로그로 겸용**한다(전용 표를 새로 만들지 않는다).
+//   · 이유 1: 새 표는 DDL이 필요하고, Supabase 대시보드가 자주 멈춰 스키마 변경이 병목이 된다.
+//   · 이유 2: 조회 자체가 퍼널 지표다 — "진단 vs 추적" 비교에 빠져 있던 조회 수치가 함께 생긴다.
+//   · 대신 최신순 이벤트를 읽어 코드에서 중복을 제거한다(PostgREST는 GROUP BY를 못 쓴다).
+const VIEW_EVENT = "novel_view";
+
+/** 조회된 작품을 자동 수집 대상에 올린다(이벤트 1행). 실패해도 조회 요청을 깨지 않는다. */
+export async function recordNovelView(novelId: number, platform: string): Promise<void> {
+  await logEvent(VIEW_EVENT, { novelId, platform });
+}
+
+/**
+ * 자동 수집 대상 ID — 최근 activeDays일 안에 조회된 작품, **최근 조회순** limit개까지.
+ * limit이 있는 이유: 크론은 300초 예산 안에서 끝나야 한다(작품당 약 2.7초 실측).
+ * scan은 훑을 이벤트 행 수 상한 — 조회가 폭증해도 읽기 비용이 일정하게 유지된다.
+ */
+export async function listRecentlyViewedIds(
+  limit = 60,
+  activeDays = 30,
+  scan = 2000,
+): Promise<number[]> {
+  const db = getDb();
+  if (!db) return [];
+  const since = new Date(Date.now() - activeDays * 86_400_000).toISOString();
+  const { data, error } = await db
+    .from("nm_events")
+    .select("meta")
+    .eq("event", VIEW_EVENT)
+    .gt("created_at", since)
+    .order("created_at", { ascending: false })
+    .limit(scan);
+  if (error) {
+    console.error("[listRecentlyViewedIds]", error.message);
+    return [];
+  }
+  const seen = new Set<number>();
+  for (const row of (data ?? []) as { meta: { novelId?: number } | null }[]) {
+    const id = Number(row.meta?.novelId);
+    if (Number.isFinite(id) && id > 0) seen.add(id);
+    if (seen.size >= limit) break; // 최신순으로 훑으므로 앞쪽이 가장 최근 조회분이다
+  }
+  return [...seen];
+}
+
 // ── 일일 베스트 아카이브 (자동 콘텐츠 엔진) ──────────────────────────────
 import type { RankItem } from "./munpia";
 

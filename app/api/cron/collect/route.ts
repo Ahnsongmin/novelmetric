@@ -6,6 +6,7 @@ import { fetchRanking as fetchKakaoRanking } from "@/lib/kakaopage";
 import { fetchNovelAny, fetchEpisodesAny, platformOf } from "@/lib/platform";
 import {
   listTrackedNovelIds,
+  listRecentlyViewedIds,
   listNotifyPrefs,
   listWeeklyTargets,
   getSnapshots,
@@ -26,6 +27,10 @@ import { scanPaidTransitions } from "@/lib/paidbench";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
+
+// 조회 기반 자동 수집분의 상한. 실측 기준 작품당 약 2.7초(추적 47작품에 127초)라,
+// 300초 예산 안에서 추적분 + 이 정도까지는 여유롭게 끝난다. 넘치면 최근 조회순으로 잘린다.
+const WATCH_COLLECT_LIMIT = 60;
 
 // 매일 1회: 추적 작품 지표 수집 → 스냅샷 적재 → 변화 감지 → 채널별 알림 발송
 export async function GET(req: NextRequest) {
@@ -76,7 +81,13 @@ export async function GET(req: NextRequest) {
     // 베스트 수집 실패해도 추적 수집은 계속
   }
 
-  const ids = await listTrackedNovelIds();
+  // 수집 대상 = 사용자가 등록한 추적 작품 + 최근 30일 안에 조회된 작품.
+  // 추적분을 먼저 넣어 예산이 부족해도 유료·알림 대상이 밀리지 않게 한다.
+  const trackedIds = await listTrackedNovelIds();
+  const viewedIds = (await listRecentlyViewedIds(WATCH_COLLECT_LIMIT)).filter(
+    (id) => !trackedIds.includes(id),
+  );
+  const ids = [...trackedIds, ...viewedIds];
   let ok = 0;
   const errors: number[] = [];
   for (const id of ids) {
@@ -211,6 +222,8 @@ export async function GET(req: NextRequest) {
     collected: ok,
     failed: errors.length,
     total: ids.length,
+    tracked: trackedIds.length,
+    watched: viewedIds.length, // 조회만으로 자동 수집된 작품 수
     notified,
     weeklySent,
     compareSent,

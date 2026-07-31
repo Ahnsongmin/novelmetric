@@ -3,8 +3,22 @@ import { fetchBest, computeRetention, type Episode, type RankItem } from "@/lib/
 import { parseQuery, platformOf, fetchNovelAny, fetchEpisodesAny } from "@/lib/platform";
 import { computeBenchmark, computeCadence } from "@/lib/analyze";
 import { retentionBenchmark } from "@/lib/benchmark";
-import { getSnapshots, saveSnapshot, trackNovel, dbEnabled, getRecentPaidBench, logEvent } from "@/lib/db";
-import { activePassFor, passValidUntil, trackedCountByOwner, FREE_TRACK_LIMIT } from "@/lib/pass";
+import {
+  getSnapshots,
+  saveSnapshot,
+  trackNovel,
+  dbEnabled,
+  getRecentPaidBench,
+  logEvent,
+  recordNovelView,
+} from "@/lib/db";
+import {
+  activePassFor,
+  passValidUntil,
+  trackedCountByOwner,
+  FREE_TRACK_LIMIT,
+  GUEST_PASS_NOTICE,
+} from "@/lib/pass";
 import { anonCookie, authEnabled, currentUser, newAnonId, readAnon } from "@/lib/auth";
 
 export const runtime = "nodejs";
@@ -39,7 +53,19 @@ export async function GET(req: NextRequest) {
       retention?.adjustedRate != null
         ? retentionBenchmark(benchPool, platformOf(novelId), stats.genre, retention.adjustedRate)
         : null;
-    return NextResponse.json({ stats, retention, cadence, benchmark, genreBench, history, dbEnabled: dbEnabled() });
+    // 조회된 작품은 그 순간부터 매일 자동 집계 대상이 된다 — 등록·가입 없이도 다음날 추이가 생긴다.
+    // 실패해도 조회 응답은 그대로 내려간다(수집 편의 기능이 조회를 깨뜨리면 안 된다).
+    await recordNovelView(novelId, platformOf(novelId));
+    return NextResponse.json({
+      stats,
+      retention,
+      cadence,
+      benchmark,
+      genreBench,
+      history,
+      dbEnabled: dbEnabled(),
+      autoCollect: dbEnabled(), // 프런트가 "오늘부터 자동 집계" 안내를 띄울 근거
+    });
   } catch (e) {
     console.error("[api/novel]", e);
     return NextResponse.json(
@@ -70,16 +96,25 @@ export async function POST(req: NextRequest) {
 
   const gated = authEnabled();
   const user = gated ? await currentUser(req) : null;
+
+  // Pro 자격은 두 경로다: 손으로 넣은 코드, 또는 계정에 귀속된 패스(기기를 바꿔도 따라온다).
+  // 코드 검사를 로그인 검사보다 먼저 한다 — 계정 없이 결제한 손님도 알림을 켤 수 있어야
+  // 주간 성장 리포트(Pro 대표 기능) 대상이 된다. 대신 가입 권유 안내를 함께 내려보낸다.
+  const codeValid = gated ? Boolean(await passValidUntil(body.passCode)) : false;
+  const isPro = codeValid || (gated ? Boolean(await activePassFor(user?.id)) : false);
+  const validPass = codeValid ? body.passCode : undefined;
+  const guestPass = gated && !user && codeValid;
+
   let anonId: string | null = null;
   let freshAnonCookie: string | null = null;
 
   if (gated && !user) {
-    if (channel !== "none" || body.contact) {
+    if ((channel !== "none" || body.contact) && !codeValid) {
       await logEvent("track_401", { platform: platformOf(novelId), channel });
       return NextResponse.json(
         {
           error: "LOGIN_REQUIRED",
-          message: "알림을 받으려면 무료 회원가입이 필요해요. 이메일만 넣으면 됩니다.",
+          message: "알림을 받으려면 무료 회원가입이 필요해요. 이메일과 비밀번호만 정하면 30초면 됩니다.",
         },
         { status: 401 },
       );
@@ -92,11 +127,6 @@ export async function POST(req: NextRequest) {
   }
 
   // 무료는 소유자당 1작품 — Pro 패스면 무제한. DB 없는 환경에서는 게이트가 꺼진다.
-  // Pro 자격은 두 경로다: 손으로 넣은 코드, 또는 계정에 귀속된 패스(기기를 바꿔도 따라온다).
-  const codeValid = gated ? Boolean(await passValidUntil(body.passCode)) : false;
-  const isPro = codeValid || (gated ? Boolean(await activePassFor(user?.id)) : false);
-  const validPass = codeValid ? body.passCode : undefined;
-
   if (gated && !isPro) {
     const count = await trackedCountByOwner({ userId: user?.id, anonId }, novelId);
     if (count >= FREE_TRACK_LIMIT) {
@@ -130,9 +160,18 @@ export async function POST(req: NextRequest) {
       channel,
       pro: isPro,
       loggedIn: Boolean(user),
+      guestPass,
       fromDiagnose: body.source === "diagnose",
     });
-    return withCookie(NextResponse.json({ ok: true, tracked: dbEnabled(), stats }), freshAnonCookie);
+    return withCookie(
+      NextResponse.json({
+        ok: true,
+        tracked: dbEnabled(),
+        stats,
+        ...(guestPass ? { notice: GUEST_PASS_NOTICE } : {}),
+      }),
+      freshAnonCookie,
+    );
   } catch (e) {
     console.error("[api/novel POST]", e);
     return NextResponse.json({ error: "추적 등록에 실패했어요." }, { status: 502 });

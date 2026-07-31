@@ -10,10 +10,8 @@ export const metadata: Metadata = {
 export default function GuidePage() {
   return (
     <main className="mx-auto max-w-3xl flex-1 px-5 py-10">
-      <a href="/" className="text-sm text-muted hover:text-foreground">
-        ← 노블메트릭
-      </a>
-      <h1 className="mt-3 text-2xl font-extrabold md:text-3xl">
+      {/* 뒤로 가기 링크는 layout.tsx의 SiteNav(전 페이지 공통 네비)로 대체됐다. */}
+      <h1 className="text-2xl font-extrabold md:text-3xl">
         웹소설 작가 지표 완전 정리: 연독률·투베·선작
       </h1>
       <p className="mt-2 text-muted">

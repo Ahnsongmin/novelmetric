@@ -9,8 +9,16 @@
 
 import { randomBytes } from "node:crypto";
 import { getDb, dbEnabled } from "./db";
+import { currentYm } from "./auth";
 
 export const PASS = { amount: 9900, days: 30, name: "노블메트릭 Pro 30일 패스" };
+/**
+ * 계정 없이 코드만으로 Pro를 쓰는 손님에게 함께 내려보내는 안내.
+ * 이용은 절대 막지 않는다 — 돈을 낸 사람을 로그인 벽 앞에 세우지 않는 것이 원칙이고,
+ * 가입은 "코드 분실·기기 변경·주간 리포트" 때문에 권하는 것이다.
+ */
+export const GUEST_PASS_NOTICE =
+  "지금 이용에는 지장 없으세요. 다음부터는 회원가입 후 이용해 주세요 — 코드를 잃어버리거나 기기를 바꿔도 Pro가 그대로 유지되고, 주간 성장 리포트도 받을 수 있어요.";
 export const FREE_DIAG_PER_MONTH = 1;
 // 진단만 Pro에도 상한이 있다 — 호출마다 실시간 AI 비용이 드는 유일한 기능이라,
 // 무제한이면 헤비 유저 한 명이 패스 값을 넘겨 쓸 수 있다. 추적·대시보드는 무제한.
@@ -83,6 +91,36 @@ export async function linkPassToUser(code: string, userId: string): Promise<void
     .eq("code", code)
     .is("user_id", null);
   if (error) console.error("[pass] 패스-계정 연결 실패:", error.message);
+}
+
+// ── 진단 사용량 (패스 코드 기준) ────────────────────────────────────────────
+// 계정 없이 결제한 손님(코드만 들고 있는 사람)도 진단을 써야 한다. 계정 기준 카운터
+// (nm_diag_usage)는 user_id가 필수라 쓸 수 없어서 코드 기준 카운터를 따로 둔다.
+// 테이블이 아직 없으면 0으로 취급 — 진단을 막지는 않는다(돈 낸 사람을 세는 문제로 세우지 않는다).
+export async function diagUsedByCode(code: string): Promise<number> {
+  const db = getDb();
+  if (!db) return 0;
+  const { data, error } = await db
+    .from("nm_diag_usage_code")
+    .select("used")
+    .eq("code", code)
+    .eq("ym", currentYm())
+    .maybeSingle();
+  if (error) {
+    console.error("[pass] 코드 진단 사용량 조회 실패:", error.message);
+    return 0;
+  }
+  return (data as { used: number } | null)?.used ?? 0;
+}
+
+/** 이번 달 사용량을 used+1로 기록. 실패해도 요청을 깨뜨리지 않는다. */
+export async function bumpDiagUsedByCode(code: string, used: number): Promise<void> {
+  const db = getDb();
+  if (!db) return;
+  const { error } = await db
+    .from("nm_diag_usage_code")
+    .upsert({ code, ym: currentYm(), used: used + 1 }, { onConflict: "code,ym" });
+  if (error) console.error("[pass] 코드 진단 사용량 기록 실패:", error.message);
 }
 
 // ── 추적 한도 ───────────────────────────────────────────────────────────────

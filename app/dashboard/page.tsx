@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import AuthBadge from "@/components/AuthBadge";
+import GuestPassNotice from "@/components/GuestPassNotice";
 import LoginGate from "@/components/LoginGate";
 import { fetchMe, storedPassCode, type Me } from "@/lib/session-client";
 
@@ -78,6 +78,8 @@ type Resp = {
   genreBench: GenreBench | null;
   history: Snapshot[];
   dbEnabled: boolean;
+  // 조회만으로 자동 수집 대상에 올랐는지 — 추이가 아직 없을 때 "오늘부터 집계" 안내에 쓴다
+  autoCollect?: boolean;
 };
 
 type SearchHit = {
@@ -122,14 +124,21 @@ export default function DashboardPage() {
   const [recents, setRecents] = useState<{ id: number; title: string }[]>([]);
 
   const [isPro, setIsPro] = useState(false);
+  // 유효한 Pro 코드를 들고 있는지 — 계정 없이 결제한 손님도 알림을 켤 수 있어야 한다.
+  const [hasPass, setHasPass] = useState(false);
   const [me, setMe] = useState<Me | null>(null);
   const [loginNeeded, setLoginNeeded] = useState("");
   const [proNeeded, setProNeeded] = useState("");
+  // 코드만으로 쓰는 손님에게 서버가 함께 내려보내는 가입 권유 안내
+  const [guestNotice, setGuestNotice] = useState("");
   // 제목 진단 결과에서 넘어왔는지 — 추적 등록 시 유입 경로로 함께 기록한다
   const [fromDiagnose, setFromDiagnose] = useState(false);
 
   // 계정 기능이 켜져 있는데 로그인 전이면 알림 채널을 켤 수 없다(알림 주소가 곧 신원).
   const needsLogin = Boolean(me?.enabled) && !me?.email;
+  // 단, 유효한 Pro 코드는 신원으로 인정한다 — 돈 낸 사람을 로그인 벽에 세우지 않는다.
+  // (계정 없이 결제한 손님이 주간 리포트 대상에서 빠지던 구멍도 이걸로 막힌다.)
+  const needsLoginForAlerts = needsLogin && !hasPass;
 
   // 카드 안에서 가입/로그인이 끝나면 페이지를 새로 고치지 않고 하던 작업을 이어간다.
   async function handleLoggedIn(resume: boolean) {
@@ -154,9 +163,10 @@ export default function DashboardPage() {
     const code = storedPassCode();
     fetch(`/api/gate${code ? `?code=${encodeURIComponent(code)}` : ""}`)
       .then((r) => r.json())
-      .then((g: { enabled: boolean; passValidUntil: string | null }) =>
-        setIsPro(!g.enabled || Boolean(g.passValidUntil)),
-      )
+      .then((g: { enabled: boolean; passValidUntil: string | null }) => {
+        setIsPro(!g.enabled || Boolean(g.passValidUntil));
+        setHasPass(Boolean(g.passValidUntil));
+      })
       .catch(() => {});
     // 로그인 상태 — 비로그인이면 알림 없는 추적이 기본값이 되도록 채널을 내린다
     fetchMe().then((m) => {
@@ -276,6 +286,7 @@ export default function DashboardPage() {
         return;
       }
       if (!res.ok) throw new Error(json.error || "추적 실패");
+      if (json.notice) setGuestNotice(json.notice);
       setTracked(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "오류가 발생했어요.");
@@ -288,13 +299,8 @@ export default function DashboardPage() {
   // 되면서 모바일에서 페이지 전체가 가로로 넘치던 문제를 막는다. best·compare 페이지도 동일.
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-5 py-10">
-      <div className="flex items-center justify-between gap-3">
-        <a href="/" className="text-sm text-muted hover:text-foreground">
-          ← 노블메트릭
-        </a>
-        <AuthBadge next="/dashboard" />
-      </div>
-      <h1 className="mt-3 text-2xl font-bold md:text-3xl">작품 성장 대시보드</h1>
+      {/* 상단 네비·계정 배지·문의는 layout.tsx의 SiteNav가 전 페이지 공통으로 그린다. */}
+      <h1 className="text-2xl font-bold md:text-3xl">작품 성장 대시보드</h1>
       <p className="mt-1.5 text-muted">
         <b className="text-foreground">작품 제목</b>으로 검색하거나 문피아·노벨피아·네이버시리즈·카카오페이지 URL을
         넣으면, 연독률·선작·조회수를 자동 계산하고 투베 진입 게이지·추이를 보여줍니다. (연독률은 문피아·노벨피아 지원)
@@ -449,7 +455,7 @@ export default function DashboardPage() {
 
           <TubePrediction favorites={data.stats.favorites} history={data.history} />
 
-          <TrendChart history={data.history} />
+          <TrendChart history={data.history} autoCollect={data.autoCollect ?? false} />
 
           <ProTrendPanel
             history={data.history}
@@ -468,9 +474,10 @@ export default function DashboardPage() {
             onTrack={() => void track()}
             dbEnabled={data.dbEnabled}
             novelId={data.stats.novelId}
-            needsLogin={needsLogin}
+            needsLogin={needsLoginForAlerts}
             loginNeeded={loginNeeded}
             proNeeded={proNeeded}
+            guestNotice={guestNotice}
             accountEmail={me?.email ?? ""}
             onLoggedIn={handleLoggedIn}
           />
@@ -616,6 +623,7 @@ function TrackBox({
   needsLogin,
   loginNeeded,
   proNeeded,
+  guestNotice,
   accountEmail,
   onLoggedIn,
 }: {
@@ -631,6 +639,7 @@ function TrackBox({
   needsLogin: boolean;
   loginNeeded: string;
   proNeeded: string;
+  guestNotice: string;
   accountEmail: string;
   onLoggedIn: (resume: boolean) => void;
 }) {
@@ -644,6 +653,11 @@ function TrackBox({
         <p className="mt-1.5 text-xs text-muted">
           📅 다음 수집은 매일 새벽 3시 — 내일 이 작품을 다시 검색하면 첫 변화 추이가 보입니다.
         </p>
+        {guestNotice && (
+          <div className="mt-3">
+            <GuestPassNotice message={guestNotice} next="/dashboard" />
+          </div>
+        )}
         {channel !== "email" && (
           <EmailNudge
             novelId={novelId}
@@ -1411,7 +1425,7 @@ function ProTrendPanel({
   );
 }
 
-function TrendChart({ history }: { history: Snapshot[] }) {
+function TrendChart({ history, autoCollect }: { history: Snapshot[]; autoCollect: boolean }) {
   const points = history
     .filter((h): h is Snapshot & { views: number } => h.views !== null)
     .map((h) => ({ views: h.views, collected_at: h.collected_at }));
@@ -1420,7 +1434,13 @@ function TrendChart({ history }: { history: Snapshot[] }) {
       <div className="rounded-xl border border-dashed border-border bg-card/20 p-6 text-center text-sm text-muted">
         📉 추이 그래프는 데이터가 2일 이상 쌓이면 표시됩니다.
         <br />
-        <span className="text-xs">‘이 작품 매일 추적하기’를 누르면 매일 자동 수집됩니다.</span>
+        {/* 예전 문구는 "추적하기를 누르면 수집된다"였는데, 이제 조회만으로 수집이 시작되므로
+            사실에 맞게 고친다. 추적 버튼의 역할은 '알림'과 '내 작품으로 묶기'로 남는다. */}
+        <span className="text-xs">
+          {autoCollect
+            ? "이 작품은 방금 조회로 집계가 시작됐어요 — 매일 새벽 3시에 자동 수집되니, 내일 다시 오시면 첫 변화가 보입니다. 변화를 메일로 받고 싶으면 아래에서 추적을 켜세요."
+            : "‘추적 시작하기’를 누르면 매일 자동 수집됩니다."}
+        </span>
       </div>
     );
   }

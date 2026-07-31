@@ -4,6 +4,7 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import GuestPassNotice from "@/components/GuestPassNotice";
 import { savePassCode } from "@/lib/session-client";
 
 const POLL_MS = 2500;
@@ -15,6 +16,7 @@ function PayappResult() {
   const [state, setState] = useState<"waiting" | "done" | "timeout" | "error">(order ? "waiting" : "error");
   const [code, setCode] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
+  const [loggedIn, setLoggedIn] = useState(true); // 확인 전에는 안내를 띄우지 않는다(깜빡임 방지)
   const polls = useRef(0);
 
   useEffect(() => {
@@ -27,7 +29,14 @@ function PayappResult() {
         if (j.code) {
           savePassCode(j.code);
           // 로그인 상태면 이 호출로 패스가 계정에 귀속된다(기기를 바꿔도 따라오게).
-          void fetch(`/api/gate?code=${encodeURIComponent(j.code)}`);
+          // 비로그인이면 귀속시킬 계정이 없으므로 아래에서 가입을 권한다 — 계정 없이 결제한
+          // 손님은 코드를 잃으면 복구 수단이 없고 주간 리포트도 받을 수 없다.
+          try {
+            const g = await fetch(`/api/gate?code=${encodeURIComponent(j.code)}`).then((r) => r.json());
+            setLoggedIn(Boolean(g.loggedIn));
+          } catch {
+            /* 연결 실패는 이용을 막지 않는다 */
+          }
           setCode(j.code);
           setExpiresAt(j.expiresAt ?? "");
           setState("done");
@@ -65,7 +74,15 @@ function PayappResult() {
             {expiresAt && `${new Date(expiresAt).toLocaleDateString("ko-KR")}까지 Pro 기능이 열립니다.`} 이 브라우저에 자동
             저장됐고, 다른 기기에서는 아래 코드를 입력하면 돼요.
           </p>
-          <p className="mb-6 rounded-lg bg-background/60 py-3 font-mono text-lg font-bold tracking-wider">{code}</p>
+          <p className="mb-4 rounded-lg bg-background/60 py-3 font-mono text-lg font-bold tracking-wider">{code}</p>
+          {!loggedIn && (
+            <div className="mb-4 text-left">
+              <GuestPassNotice
+                message="이 코드로 지금 바로 이용하실 수 있어요. 다음부터는 회원가입 후 이용해 주세요 — 계정에 연결해두면 코드를 잃어버리거나 기기를 바꿔도 Pro가 유지되고, 주간 성장 리포트를 이메일로 받을 수 있어요."
+                next="/dashboard"
+              />
+            </div>
+          )}
           <a
             href="/dashboard"
             className="block w-full rounded-lg bg-gradient-to-r from-accent to-accent-2 py-3 font-bold text-background transition hover:opacity-90"
@@ -81,9 +98,19 @@ function PayappResult() {
             아래로 문의 주세요. 바로 처리해 드릴게요.
           </p>
           <p className="font-mono text-xs text-muted">주문번호: {order}</p>
-          <a href="mailto:songminan90@gmail.com" className="mt-3 inline-block text-accent hover:underline">
-            메일로 문의하기
+          {/* 결제 지연은 가장 급한 문의다 — 유형을 미리 결제로 골라 보낸다. */}
+          <a
+            href="/contact?kind=payment"
+            className="mt-3 inline-block font-bold text-accent hover:underline"
+          >
+            결제 문의 남기기 →
           </a>
+          <p className="mt-1 text-xs text-muted">
+            또는 메일:{" "}
+            <a href="mailto:songminan90@gmail.com" className="text-accent hover:underline">
+              songminan90@gmail.com
+            </a>
+          </p>
         </div>
       )}
       {state === "error" && (

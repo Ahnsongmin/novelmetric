@@ -18,8 +18,8 @@ export default async function InsightsPage() {
 
   return (
     <main className="mx-auto max-w-3xl flex-1 px-5 py-12">
-      <a href="/" className="text-sm text-muted hover:text-foreground">← 노블메트릭</a>
-      <h1 className="mt-3 text-3xl font-bold">웹소설 트렌드 리포트</h1>
+      {/* 뒤로 가기 링크는 layout.tsx의 SiteNav(전 페이지 공통 네비)로 대체됐다. */}
+      <h1 className="text-3xl font-bold">웹소설 트렌드 리포트</h1>
       <p className="mt-2 text-muted">
         매일 수집한 문피아·노벨피아·네이버시리즈·카카오페이지 베스트를 분석해 제목 패턴·후킹 키워드·장르 분포를
         기록합니다.

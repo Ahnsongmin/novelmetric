@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import AuthBadge from "@/components/AuthBadge";
+import GuestPassNotice from "@/components/GuestPassNotice";
 import LoginGate from "@/components/LoginGate";
 import { storedPassCode } from "@/lib/session-client";
 
@@ -14,6 +14,8 @@ type DiagnoseResult = {
   titleSuggestions: { title: string; reason: string }[];
   keywords: string[];
   engine: "claude" | "heuristic";
+  // 계정 없이 Pro 코드로만 쓰는 손님에게만 내려온다 — 이용은 막지 않고 가입만 권한다.
+  notice?: string;
 };
 
 // 문피아·노벨피아 베스트에 실제 등장하는 장르 + 양 플랫폼 공식 분류 통합
@@ -62,7 +64,8 @@ const EXAMPLES: { title: string; synopsis: string; genre: string }[] = [
 export default function Home() {
   return (
     <>
-      <Header />
+      {/* 헤더·푸터는 layout.tsx의 SiteNav / SiteFooter로 옮겼다(전 페이지 공통).
+          여기서 다시 그리면 두 번 나온다. */}
       <main className="flex-1">
         <Hero />
         <ValueProps />
@@ -71,41 +74,7 @@ export default function Home() {
         <FAQ />
         <FinalCta />
       </main>
-      <Footer />
     </>
-  );
-}
-
-function Header() {
-  return (
-    <header className="sticky top-0 z-20 border-b border-border/60 bg-background/70 backdrop-blur">
-      <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-3.5">
-        <a href="#top" className="flex items-center gap-2 font-bold tracking-tight">
-          <span className="grid h-7 w-7 place-items-center rounded-lg bg-gradient-to-br from-accent to-accent-2 text-sm text-background">
-            N
-          </span>
-          노블메트릭
-        </a>
-        <nav className="flex items-center gap-1 text-sm">
-          <a href="/best" className="hidden rounded-full px-3 py-1.5 text-muted transition hover:text-foreground sm:block">
-            베스트 분석
-          </a>
-          <a href="/insights" className="hidden rounded-full px-3 py-1.5 text-muted transition hover:text-foreground sm:block">
-            트렌드
-          </a>
-          <a href="/dashboard" className="rounded-full px-3 py-1.5 text-muted transition hover:text-foreground">
-            대시보드
-          </a>
-          <a
-            href="/pro"
-            className="rounded-full border border-border px-4 py-1.5 font-semibold text-accent transition hover:border-accent hover:text-foreground"
-          >
-            Pro
-          </a>
-          <AuthBadge />
-        </nav>
-      </div>
-    </header>
   );
 }
 
@@ -293,6 +262,14 @@ function DiagnoseTool() {
       <div className="rounded-2xl border border-border bg-card/40 p-5">
         {!result && !loading && <ResultPlaceholder />}
         {loading && <ResultSkeleton />}
+        {/* 코드만으로 쓰는 손님: 진단은 그대로 보여주고, 위에 가입 권유만 얹는다.
+            next를 /dashboard로 두는 이유 — 대시보드 진입 시 /api/gate?code= 가 호출되면서
+            그 코드가 계정에 귀속된다(그래야 기기를 바꿔도 Pro가 따라온다). */}
+        {result?.notice && (
+          <div className="mb-3">
+            <GuestPassNotice message={result.notice} next="/dashboard" />
+          </div>
+        )}
         {result && <ResultView result={result} title={title} />}
       </div>
     </div>
@@ -645,7 +622,7 @@ function FAQ() {
     },
     {
       q: "무료인가요?",
-      a: "작품 1개 추적과 연독률·투베 게이지 분석은 가입 없이 바로 됩니다. 이메일 알림 등록과 제목 진단(매달 1회)은 무료 회원가입이 필요해요 — 이메일 주소만 넣으면 링크로 로그인됩니다. Pro(9,900원/30일, 자동결제 없음)는 추적 작품 무제한, 경쟁작 주간 비교 메일, 장르 벤치마크, 심화 추이 분석을 더해 줍니다.",
+      a: "작품 1개 추적과 연독률·투베 게이지 분석은 가입 없이 바로 됩니다. 이메일 알림 등록과 제목 진단(매달 1회)은 무료 회원가입이 필요해요 — 이메일과 비밀번호만 정하면 30초면 됩니다. Pro(9,900원/30일, 자동결제 없음)는 추적 작품 무제한, 경쟁작 주간 비교 메일, 장르 벤치마크, 심화 추이 분석을 더해 줍니다.",
     },
   ];
   return (
@@ -751,18 +728,3 @@ function FinalCta() {
   );
 }
 
-function Footer() {
-  return (
-    <footer className="border-t border-border/60 py-8 text-center text-xs text-muted">
-      <nav className="mb-3 flex flex-wrap justify-center gap-x-4 gap-y-1">
-        <a href="/dashboard" className="hover:text-foreground">대시보드</a>
-        <a href="/compare" className="hover:text-foreground">작품 비교</a>
-        <a href="/best" className="hover:text-foreground">베스트 분석</a>
-        <a href="/insights" className="hover:text-foreground">트렌드 리포트</a>
-        <a href="/guide" className="hover:text-foreground">작가 지표 가이드</a>
-        <a href="/pro" className="hover:text-foreground">Pro 패스</a>
-      </nav>
-      <p>© 2026 노블메트릭(NovelMetric). 웹소설 작가를 위한 노출·성장 분석.</p>
-    </footer>
-  );
-}

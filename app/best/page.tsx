@@ -56,10 +56,8 @@ export default async function BestPage({ searchParams }: Props) {
 
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-5 py-10">
-      <a href="/" className="text-sm text-muted hover:text-foreground">
-        ← 노블메트릭
-      </a>
-      <h1 className="mt-3 text-2xl font-bold md:text-3xl">오늘 베스트 · 제목 패턴 분석</h1>
+      {/* 뒤로 가기 링크는 layout.tsx의 SiteNav(전 페이지 공통 네비)로 대체됐다. */}
+      <h1 className="text-2xl font-bold md:text-3xl">오늘 베스트 · 제목 패턴 분석</h1>
       <p className="mt-1.5 text-muted">
         {tab.listName}을 수집해, 잘 팔리는 제목의 공통점을 데이터로 보여드립니다. (1시간마다 갱신)
       </p>

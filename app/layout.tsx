@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Analytics } from "@vercel/analytics/next";
+import SiteFooter from "@/components/SiteFooter";
+import SiteNav from "@/components/SiteNav";
 import "./globals.css";
 
 export const viewport: Viewport = {
@@ -45,7 +47,11 @@ export default function RootLayout({
   return (
     <html lang="ko" className="h-full antialiased">
       <body className="min-h-full flex flex-col">
+        {/* 어느 페이지에서든 다른 섹션으로 바로 이동할 수 있게 — 예전엔 홈에만 헤더가 있었다. */}
+        <SiteNav />
         {children}
+        {/* 문의 경로는 전 페이지에 있어야 한다 — 홈에만 있던 푸터를 여기로 올렸다. */}
+        <SiteFooter />
         <Analytics />
       </body>
     </html>
